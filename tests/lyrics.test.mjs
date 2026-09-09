@@ -1,5 +1,12 @@
 import test from'node:test';import assert from'node:assert/strict';
-// Keep this contract mirrored with src/lib/lyrics.ts; browser Intl.Segmenter is the implementation.
-function segment(text){const p=/^[\p{P}\p{S}]+$/u,out=[];let prefix='';for(const x of new Intl.Segmenter('ko',{granularity:'grapheme'}).segment(text)){const c=x.segment;if(/^\s+$/u.test(c))continue;if(p.test(c)){if(out.length)out[out.length-1]+=c;else prefix+=c}else{out.push(prefix+c);prefix=''}}return out}
-test('Korean spaces and punctuation are not standalone timing units',()=>assert.deepEqual(segment('우리 함께 문을 열어!'),['우','리','함','께','문','을','열','어!']));
-test('punctuation never becomes a standalone timing unit',()=>assert.deepEqual(segment('“가자!”'),['“가','자!”']));
+import{parseLyrics,segmentKorean,makeSegments}from'../lib/lyrics.js';
+import{applyStamp,blockAt,segmentProgress}from'../lib/frame.js';
+import{lyricSegmentRects}from'../lib/renderer.js';
+test('actual segmenter excludes spaces and joins punctuation',()=>assert.deepEqual(segmentKorean('우리 함께 문을 열어!'),['우','리','함','께','문','을','열','어!']));
+test('segments retain source offsets around Korean spaces',()=>assert.deepEqual(makeSegments('우리 함께').map(({text,charStart,charEnd})=>({text,charStart,charEnd})),[{text:'우',charStart:0,charEnd:1},{text:'리',charStart:1,charEnd:2},{text:'함',charStart:3,charEnd:4},{text:'께',charStart:4,charEnd:5}]));
+const roles=[{id:'all',name:'전체',color:'#ffd43b'}];
+test('plain mode treats role prefixes as lyrics and uses the fallback role',()=>{const result=parseLyrics('[왜] 여기 있어',roles);assert.equal(result.blocks[0].text,'[왜] 여기 있어');assert.equal(result.blocks[0].roleId,'all');assert.equal(result.roles.length,1)});
+test('musical mode creates and assigns an explicitly entered role',()=>{const result=parseLyrics('[왜] 여기 있어',roles,true);assert.equal(result.blocks[0].text,'여기 있어');assert.equal(result.roles.find(role=>role.name==='왜')?.id,result.blocks[0].roleId)});
+test('the next stamp always finalizes the previous syllable',()=>{const segments=[{id:'a',text:'사',start:1,end:1.35},{id:'b',text:'랑',start:0,end:0}];applyStamp(segments,1,3);assert.equal(segments[0].end,3);assert.deepEqual([segments[1].start,segments[1].end],[3,3.35])});
+test('segment progress and untimed block selection are stable',()=>{assert.equal(segmentProgress({id:'a',text:'가',start:1,end:3},2),.5);const blocks=[{id:'1',text:'첫 줄',roleId:'all',segments:[]},{id:'2',text:'끝 줄',roleId:'all',segments:[]}];assert.equal(blockAt({lyricBlocks:blocks},0).index,0)});
+test('highlight rectangles include source-space advances',()=>{const block={id:'b',text:'가 나',roleId:'all',segments:makeSegments('가 나')};const ctx={measureText:text=>({width:text.length*10})};assert.deepEqual(lyricSegmentRects(ctx,block,50).map(x=>[x.x,x.width]),[[35,10],[55,10]])});
