@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#34256d">
+    <title>뮤지컬 노래방</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div id="app">
+      <main class="boot-status" role="status">
+        <strong>뮤지컬 노래방을 여는 중이에요…</strong>
+        <span>잠시만 기다려 주세요.</span>
+      </main>
+    </div>
+    <script>
+      window.addEventListener('error', function () {
+        var app = document.getElementById('app');
+        if (app && app.querySelector('.boot-status')) {
+          app.innerHTML = '<main class="boot-status boot-error"><strong>앱을 불러오지 못했어요.</strong><span>GitHub Actions의 Pages 배포 기록과 브라우저 콘솔을 확인해 주세요.</span></main>';
+        }
+      });
+    </script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
