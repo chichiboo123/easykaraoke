@@ -27,7 +27,9 @@ npm run dev
 
 이 앱은 백엔드가 없는 정적 웹앱이므로 Cloudflare Pages가 반드시 필요하지 않습니다. 저장소의 `.github/workflows/deploy-pages.yml`이 `work` 또는 `main` 브랜치 push 시 테스트와 빌드를 수행하고 `dist` 폴더를 GitHub Pages에 배포합니다.
 
-최초 한 번 저장소의 **Settings → Pages → Build and deployment → Source**에서 **GitHub Actions**를 선택하세요. 이후 Actions 탭의 **Deploy to GitHub Pages** workflow를 수동 실행하거나 대상 브랜치에 push하면 됩니다. 프로젝트 사이트가 `https://사용자명.github.io/저장소명/`처럼 하위 경로에 배포되어도 동작하도록 모든 정적 자산과 JavaScript import는 상대 경로를 사용합니다.
+권장 방식은 저장소의 **Settings → Pages → Build and deployment → Source**에서 **GitHub Actions**를 선택하는 것입니다. 이후 Actions 탭의 **Deploy to GitHub Pages** workflow를 수동 실행하거나 대상 브랜치에 push하면 됩니다. 프로젝트 사이트가 `https://사용자명.github.io/저장소명/`처럼 하위 경로에 배포되어도 동작하도록 모든 정적 자산과 JavaScript import는 상대 경로를 사용합니다.
+
+현재 저장소는 **Deploy from a branch → /(root)** 설정도 지원합니다. `npm run build`가 `app.js`, `types.js`, `lib/`, `styles.css`, `fonts/`를 저장소 루트에도 동기화하며 해당 결과를 커밋합니다. 따라서 기존 Pages 설정을 바꾸지 않아도 최신 커밋을 배포하면 동작합니다. 다만 테스트를 통과한 결과만 배포하는 GitHub Actions 방식을 권장합니다.
 
 배포 전에는 아래 명령으로 HTML, JavaScript 모듈과 CSS가 모두 출력 폴더에 존재하는지 검사할 수 있습니다.
 
@@ -36,7 +38,7 @@ npm run build
 npm run check:deploy
 ```
 
-화면이 비어 있다면 GitHub의 **Actions → Deploy to GitHub Pages**에서 최신 workflow가 성공했는지 확인하세요. Pages Source를 **Deploy from a branch**로 두고 저장소 루트를 직접 공개하면 컴파일된 `app.js`가 없으므로 실행되지 않습니다.
+화면이 비어 있다면 GitHub의 **Actions → Deploy to GitHub Pages** 또는 Pages에 지정한 배포 브랜치가 최신 커밋인지 확인한 뒤 브라우저에서 강력 새로고침하세요. 루트의 `app.js`와 `styles.css`가 404라면 아직 이 수정 커밋이 Pages에 반영되지 않은 상태입니다.
 
 ## 권장 브라우저와 제한
 

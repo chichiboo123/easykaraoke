@@ -16,4 +16,11 @@ const app = readFileSync(join(dist, 'app.js'), 'utf8');
 for (const match of app.matchAll(/from\s*['"](.+?\.js)['"]/g)) {
   if (!existsSync(resolve(dist, match[1]))) throw new Error(`컴파일된 모듈 누락: ${match[1]}`);
 }
+for (const file of required) {
+  const branchFile = join(resolve('.'), file);
+  if (!existsSync(branchFile)) throw new Error(`브랜치 직접 배포용 파일 누락: ${file}`);
+  const artifact = readFileSync(join(dist, file));
+  const branch = readFileSync(branchFile);
+  if (!artifact.equals(branch)) throw new Error(`브랜치 직접 배포용 파일이 최신 빌드와 다름: ${file}`);
+}
 console.log('GitHub Pages 배포 산출물 검사 통과');

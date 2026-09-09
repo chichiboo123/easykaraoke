@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#34256d">
     <title>뮤지컬 노래방</title>
-    <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./styles.css?v=1.0.2">
   </head>
   <body>
     <div id="app">
@@ -21,7 +21,13 @@
           app.innerHTML = '<main class="boot-status boot-error"><strong>앱을 불러오지 못했어요.</strong><span>GitHub Actions의 Pages 배포 기록과 브라우저 콘솔을 확인해 주세요.</span></main>';
         }
       });
+      window.setTimeout(function () {
+        var app = document.getElementById('app');
+        if (app && app.querySelector('.boot-status')) {
+          app.innerHTML = '<main class="boot-status boot-error"><strong>앱 실행 파일을 찾지 못했어요.</strong><span>GitHub Pages 배포가 최신 커밋인지 확인한 뒤 강력 새로고침해 주세요.</span></main>';
+        }
+      }, 8000);
     </script>
-    <script type="module" src="./app.js"></script>
+    <script type="module" src="./app.js?v=1.0.2"></script>
   </body>
 </html>
