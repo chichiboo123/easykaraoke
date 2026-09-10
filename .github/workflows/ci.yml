@@ -43,6 +43,14 @@ jobs:
       - name: Verify deployment artifact
         run: npm run check:deploy
 
+      # 단위 테스트는 순수 로직만 덮는다. 이 앱에서 실제로 깨지는 곳은 UI 배선과
+      # Canvas 렌더링이라, 브라우저로 실제 흐름을 돌려 본다.
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser smoke test
+        run: npm run test:e2e
+
       # 이 저장소는 컴파일된 app.js / lib/ / styles.css / fonts/ 를 루트에도 커밋한다
       # (GitHub Pages의 "Deploy from a branch /(root)" 설정을 지원하기 위해).
       # src/ 만 고치고 빌드를 커밋하지 않으면 배포본이 소스와 어긋나므로 여기서 잡는다.

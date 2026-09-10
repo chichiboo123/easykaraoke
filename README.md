@@ -63,7 +63,24 @@ npm run build
 npm run dev
 ```
 
-`http://localhost:5173`에서 확인합니다. 타입 검사는 `npm run typecheck`, 테스트는 `npm test`, 정적 검사는 `npm run lint`입니다.
+`http://localhost:5173`에서 확인합니다.
+
+| 명령 | 하는 일 |
+|---|---|
+| `npm run typecheck` | 타입 검사 |
+| `npm test` | 단위 테스트 (가사 분리·타이밍 계산 등 순수 로직) |
+| `npm run test:e2e` | 브라우저 스모크 테스트 (실제 제작 흐름을 Chromium으로 실행) |
+| `npm run test:all` | 위 둘 다 |
+| `npm run build` | 빌드 + 저장소 루트 동기화 |
+| `npm run check:deploy` | 배포 산출물 검사 |
+
+브라우저 테스트는 외부 CDN을 느리게 만든 상태로 돌아갑니다. 네트워크에 흔들리지 않으면서,
+학교 방화벽처럼 CDN이 느린 환경에서도 앱이 제대로 뜨는지 함께 검사합니다.
+로컬에 Chromium이 이미 있다면 `PLAYWRIGHT_CHROMIUM_PATH`로 경로를 지정할 수 있습니다.
+
+**빌드 산출물을 함께 커밋해야 합니다.** 이 저장소는 GitHub Pages의 "Deploy from a branch /(root)" 설정을
+지원하려고 컴파일 결과를 루트에도 둡니다. `src/`를 고쳤다면 `npm run build` 후 변경된 파일을 함께 커밋하세요.
+CI가 이 불일치를 잡습니다.
 
 ## GitHub Pages 배포
 
