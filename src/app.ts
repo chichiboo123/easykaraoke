@@ -1,36 +1,410 @@
-import{newProject,uid,type KaraokeProject,type Segment,type Preset}from'./types.js';import{parseLyrics,flatten,segmentKorean}from'./lib/lyrics.js';import{loadBuiltins,loadCustomFont,fonts}from'./lib/fonts.js';import{saveProject,loadProjects,loadFile}from'./lib/storage.js';import{renderFrame}from'./lib/renderer.js';import{exportSupport,exportVideo}from'./lib/exporter.js';
-const $=<T extends HTMLElement>(q:string)=>document.querySelector<T>(q)!;const esc=(s:string)=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));const fmt=(n:number)=>`${String(Math.floor(n/60)).padStart(2,'0')}:${(n%60).toFixed(3).padStart(6,'0')}`;
-let project:KaraokeProject|null=null,audioBlob:Blob|undefined,bgBlob:Blob|undefined,fontBlob:Blob|undefined,audioUrl='',bgUrl='',bgImage:HTMLImageElement|undefined,selected='',stampIndex=0,step=1,dirtyTimer=0,history:KaraokeProject[]=[],future:KaraokeProject[]=[];const audio=new Audio();audio.preload='auto';
-function shell(body:string){$('#app').innerHTML=`<header><button class="brand" id="home">♪ <b>여기 있어 노래방</b></button>${project?`<span class="saved" id="saved">브라우저에 자동 저장</span>`:''}</header>${body}<footer><a href="https://litt.ly/chichiboo" target="_blank" rel="noopener noreferrer">Created by. 교육뮤지컬 꿈꾸는 치수쌤</a><span>TJ 노래하는즐거움체의 지적재산권은 TJ미디어㈜에 있습니다. 개인적·비영리 용도입니다.</span></footer>`;$('#home').onclick=()=>{audio.pause();project=null;home()}}
-async function home(){const recent=await loadProjects().catch(()=>[]);shell(`<main class="landing"><section class="hero"><span class="eyebrow">LOCAL-FIRST CREATIVE TOOL</span><h1>반주와 가사만 있으면<br><em>우리만의 노래방 영상 완성</em></h1><p>반주를 넣고, 가사 타이밍을 맞추고, 원하는 무대를 골라보세요.<br>모든 작업은 브라우저에서 이루어집니다.</p><div><button class="primary" id="new">새 노래 만들기</button><label class="button">프로젝트 불러오기<input id="import" type="file" accept=".mkaraoke,application/json"></label></div><small>🔒 음원과 작업 파일은 서버에 업로드되지 않아요.</small></section>${recent.length?`<section class="recent"><h2>최근 작업</h2>${recent.slice(0,6).map(p=>`<button class="recent-card" data-id="${p.id}"><b>${esc(p.meta.title)}</b><span>${new Date(p.updatedAt).toLocaleString('ko-KR')}</span></button>`).join('')}</section>`:''}</main>`);$('#new').onclick=createDialog;$('#import').onchange=importPackage;document.querySelectorAll<HTMLElement>('.recent-card').forEach(x=>x.onclick=()=>openRecent(x.dataset.id!))}
-function createDialog(){shell(`<main class="narrow"><button class="back" id="back">← 돌아가기</button><h1>새 노래 만들기</h1><p>곡 제목만 입력하면 바로 시작할 수 있어요.</p><form id="create"><label>곡 제목 <strong>*</strong><input name="title" required autofocus></label><div class="two"><label>작품명<input name="musical"></label><label>곡 번호<input name="number"></label><label>작곡<input name="composer"></label><label>작사<input name="lyricist"></label></div><button class="primary">편집 시작하기</button></form></main>`);$('#back').onclick=home;$('#create').onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget as HTMLFormElement);project=newProject(String(f.get('title')));for(const k of ['musical','number','composer','lyricist']as const)project.meta[k]=String(f.get(k));save();editor()}}
-function normalizeProject(p:KaraokeProject){if(typeof p.musicalMode!=='boolean')p.musicalMode=true;return p}
-async function openRecent(id:string){project=normalizeProject((await loadProjects()).find(x=>x.id===id)!);audioBlob=await loadFile(id,'audio');bgBlob=await loadFile(id,'background');fontBlob=await loadFile(id,'font');if(audioBlob)setAudio(audioBlob,project.media.name);if(bgBlob)setBackground(bgBlob);if(fontBlob){const f=new File([fontBlob],'custom.otf');project.style.fontFamily=await loadCustomFont(f)}editor()}
-function nav(){return`<nav class="steps">${['반주','가사','타이밍','디자인','내보내기'].map((x,i)=>`<button data-step="${i+1}" class="${step===i+1?'active':''}"><i>${i+1}</i>${x}</button>`).join('')}</nav>`}
-function editor(){if(!project)return;const bodies=[audioStep,lyricsStep,timingStep,designStep,exportStep];shell(`<main class="workspace">${nav()}<section class="editor">${bodies[step-1]()}</section></main>`);document.querySelectorAll<HTMLElement>('[data-step]').forEach(b=>b.onclick=()=>{step=Number(b.dataset.step);editor()});bindCommon();if(step===1)bindAudio();if(step===2)bindLyrics();if(step===3)bindTiming();if(step===4)bindDesign();if(step===5)bindExport()}
-function bindCommon(){document.querySelectorAll<HTMLInputElement>('[data-meta]').forEach(i=>i.onchange=()=>change(()=>project!.meta[i.dataset.meta as keyof KaraokeProject['meta']]=i.value))}
-function audioStep(){return`<h1>1. 반주</h1><p>원본 속도와 음정을 그대로 사용합니다.</p><div class="drop"><input id="audio-file" type="file" accept="audio/mpeg,audio/wav,audio/mp4,audio/aac"><b>${project!.media.name?`🎵 ${esc(project!.media.name)}`:'MP3, WAV, M4A 또는 AAC 파일을 놓아주세요'}</b><span>파일은 이 브라우저 안에서만 처리됩니다.</span></div>${project!.media.name?`<div class="player"><canvas id="wave" width="1000" height="150"></canvas><input id="seek" type="range" min="0" max="${project!.media.duration}" step=".01" value="0"><div><button id="play">▶ 재생</button><output id="clock">00:00.000 / ${fmt(project!.media.duration)}</output><label>볼륨 <input id="volume" type="range" min="0" max="1" step=".05" value="1"></label></div></div>`:''}<div class="next"><button data-step="2" class="primary">가사 입력하기 →</button></div>`}
-function bindAudio(){$('#audio-file').onchange=e=>{const f=(e.target as HTMLInputElement).files?.[0];if(!f)return;if(!/audio\/(mpeg|wav|x-wav|mp4|aac)/.test(f.type)&&!/.(mp3|wav|m4a|aac)$/i.test(f.name))return alert('MP3, WAV, M4A, AAC 파일을 선택해 주세요.');setAudio(f,f.name)};if(!project!.media.name)return;const seek=$<HTMLInputElement>('#seek'),clock=$<HTMLOutputElement>('#clock');$('#play').onclick=()=>audio.paused?audio.play():audio.pause();seek.oninput=()=>audio.currentTime=Number(seek.value);$('#volume').oninput=e=>audio.volume=Number((e.target as HTMLInputElement).value);audio.ontimeupdate=()=>{seek.value=String(audio.currentTime);clock.textContent=`${fmt(audio.currentTime)} / ${fmt(audio.duration||0)}`};drawWave()}
-function setAudio(blob:Blob,name:string){audioBlob=blob;if(audioUrl)URL.revokeObjectURL(audioUrl);audioUrl=URL.createObjectURL(blob);audio.src=audioUrl;audio.onloadedmetadata=()=>{project!.media={name,type:blob.type,duration:audio.duration};save();editor()};audio.onerror=()=>alert('음원을 읽지 못했어요. 손상되지 않은 지원 파일인지 확인해 주세요.')}
-async function drawWave(){if(!audioBlob)return;try{const ac=new AudioContext();const buf=await ac.decodeAudioData(await audioBlob.arrayBuffer());const d=buf.getChannelData(0),c=$<HTMLCanvasElement>('#wave'),x=c.getContext('2d')!;x.fillStyle='#f1eff8';x.fillRect(0,0,c.width,c.height);x.strokeStyle='#6046a8';x.beginPath();for(let px=0;px<c.width;px++){let peak=0;for(let j=Math.floor(px*d.length/c.width);j<Math.floor((px+1)*d.length/c.width);j++)peak=Math.max(peak,Math.abs(d[j]));x.moveTo(px,75-peak*68);x.lineTo(px,75+peak*68)}x.stroke();c.onclick=e=>audio.currentTime=e.offsetX/c.clientWidth*audio.duration;await ac.close()}catch{alert('파형을 만들지 못했지만 재생은 계속 사용할 수 있어요.')}}
-function lyricsStep(){const mode=project!.musicalMode;return`<h1>2. 가사${mode?'와 배역':''}</h1><label class="mode-toggle"><span><b>뮤지컬 모드</b><small>배역을 나누고 영상에 역할 이름을 표시해요.</small></span><input id="musical-mode" type="checkbox" role="switch" ${mode?'checked':''}></label><p>${mode?'<code>[배역] 가사</code> 형식으로 입력하면 배역도 한 번에 만들어져요. 배역 표시는 선택 사항입니다.':'한 줄에 한 소절씩 가사만 입력해 주세요. 배역 없이 일반 노래방으로 만들어요.'}</p><textarea id="lyrics" rows="7" placeholder="${mode?'[왜] 왜 저럴까 정말 그럴까\n[전체] 우리 함께 문을 열어!':'왜 저럴까 정말 그럴까\n우리 함께 문을 열어!'}">${esc(project!.lyricBlocks.map(b=>mode?`[${project!.roles.find(r=>r.id===b.roleId)?.name||'전체'}] ${b.text}`:b.text).join('\n'))}</textarea><button id="apply" class="primary">가사 카드 만들기</button>${mode?`<div class="role-list"><h2>배역 색상</h2>${project!.roles.map(r=>`<label class="role"><input type="color" data-rolecolor="${r.id}" value="${r.color}"><input data-rolename="${r.id}" value="${esc(r.name)}" aria-label="배역 이름"></label>`).join('')}</div>`:''}<div class="cards">${project!.lyricBlocks.map((b,i)=>`<article><span>${i+1}</span>${mode?`<select data-blockrole="${b.id}" aria-label="${i+1}번 가사 배역">${project!.roles.map(r=>`<option value="${r.id}" ${r.id===b.roleId?'selected':''}>${esc(r.name)}</option>`).join('')}</select>`:''}<input data-blocktext="${b.id}" value="${esc(b.text)}" aria-label="${i+1}번 가사"><button data-up="${b.id}" aria-label="위로">↑</button><button data-down="${b.id}" aria-label="아래로">↓</button></article>`).join('')}</div>`}
-function bindLyrics(){$<HTMLInputElement>('#musical-mode').onchange=e=>change(()=>project!.musicalMode=(e.target as HTMLInputElement).checked);$('#apply').onclick=()=>change(()=>{const r=parseLyrics($<HTMLTextAreaElement>('#lyrics').value,project!.roles,project!.musicalMode);project!.roles=r.roles;project!.lyricBlocks=r.blocks;stampIndex=0});document.querySelectorAll<HTMLInputElement>('[data-rolecolor]').forEach(x=>x.onchange=()=>change(()=>project!.roles.find(r=>r.id===x.dataset.rolecolor)!.color=x.value));document.querySelectorAll<HTMLInputElement>('[data-rolename]').forEach(x=>x.onchange=()=>change(()=>project!.roles.find(r=>r.id===x.dataset.rolename)!.name=x.value));document.querySelectorAll<HTMLSelectElement>('[data-blockrole]').forEach(x=>x.onchange=()=>change(()=>project!.lyricBlocks.find(b=>b.id===x.dataset.blockrole)!.roleId=x.value));document.querySelectorAll<HTMLInputElement>('[data-blocktext]').forEach(x=>x.onchange=()=>change(()=>{const b=project!.lyricBlocks.find(b=>b.id===x.dataset.blocktext)!;b.text=x.value;b.segments=segmentKorean(x.value).map(t=>({id:uid(),text:t,start:0,end:0}))}));for(const dir of ['up','down'])document.querySelectorAll<HTMLElement>(`[data-${dir}]`).forEach(x=>x.onclick=()=>change(()=>{const i=project!.lyricBlocks.findIndex(b=>b.id===x.dataset[dir]);const n=i+(dir==='up'?-1:1);if(n>=0&&n<project!.lyricBlocks.length)[project!.lyricBlocks[i],project!.lyricBlocks[n]]=[project!.lyricBlocks[n],project!.lyricBlocks[i]]}))}
-function timingStep(){const all=flatten(project!.lyricBlocks),cur=all[stampIndex];return`<h1>3. 타이밍 찍기</h1><p>음악을 들으며 <kbd>Space</kbd>를 누르세요. <kbd>K</kbd> 재생 · <kbd>Backspace</kbd> 취소 · <kbd>← →</kbd> 10ms · <kbd>Shift</kbd> 50ms</p>${!audioBlob?'<div class="notice">먼저 반주 파일을 넣어 주세요.</div>':''}<div class="timing-grid"><section class="stamp"><small>다음 음절</small><strong>${esc(cur?.segment.text||'완료!')}</strong><div>${all.slice(stampIndex+1,stampIndex+6).map(x=>`<span>${esc(x.segment.text)}</span>`).join('')}</div><button id="stamp" class="primary" ${!audioBlob||!cur?'disabled':''}>Space · 지금 찍기</button><button id="timing-play">${audio.paused?'▶':'Ⅱ'} K 재생/정지</button><output id="timing-clock">${fmt(audio.currentTime)}</output></section><section><canvas id="preview" width="960" height="540"></canvas></section></div><div class="loop"><label>A <input id="loop-a" type="number" min="0" step=".01" value="0"></label><label>B <input id="loop-b" type="number" min="0" step=".01" value="${Math.min(10,project!.media.duration)}"></label><label><input id="loop-on" type="checkbox"> A–B 반복</label><label>확대 <input id="zoom" type="range" min="40" max="300" value="100"></label></div><div class="timeline" id="timeline">${all.map(({segment,block})=>`<button class="segment ${segment.id===selected?'selected':''}" data-seg="${segment.id}" style="--left:${segment.start*100}px;--width:${Math.max(34,(segment.end-segment.start)*100)}px;${project!.musicalMode?`border-color:${project!.roles.find(r=>r.id===block.roleId)?.color}`:''}" title="${fmt(segment.start)} – ${fmt(segment.end)}">${esc(segment.text)}</button>`).join('')}</div><div id="inspector">${inspector()}</div>`}
-function inspector(){const s=findSegment(selected);if(!s)return'<p class="muted">타임라인에서 음절을 선택하면 숫자로 조정할 수 있어요.</p>';return`<div class="inspect"><b>${esc(s.text)}</b><label>시작 <input id="seg-start" type="number" min="0" step=".001" value="${s.start.toFixed(3)}"></label><label>끝 <input id="seg-end" type="number" min="0" step=".001" value="${s.end.toFixed(3)}"></label>${[-100,-50,-10,10,50,100].map(n=>`<button data-nudge="${n}">${n>0?'+':''}${n}ms</button>`).join('')}<button id="split">음절 분리</button><button id="merge">다음과 합치기</button></div>`}
-function findSegment(id:string){return flatten(project!.lyricBlocks).find(x=>x.segment.id===id)?.segment}
-function bindTiming(){const canvas=$<HTMLCanvasElement>('#preview'),ctx=canvas.getContext('2d')!;const loop=()=>{if(!canvas.isConnected)return;ctx.save();ctx.scale(.5,.5);renderFrame(ctx,project!,audio.currentTime,bgImage);ctx.restore();const clock=document.querySelector('#timing-clock');if(clock)clock.textContent=fmt(audio.currentTime);const on=$<HTMLInputElement>('#loop-on');if(on?.checked&&audio.currentTime>=Number($<HTMLInputElement>('#loop-b').value))audio.currentTime=Number($<HTMLInputElement>('#loop-a').value);requestAnimationFrame(loop)};loop();$('#stamp').onclick=stamp;$('#timing-play').onclick=()=>audio.paused?audio.play():audio.pause();document.querySelectorAll<HTMLElement>('[data-seg]').forEach(x=>x.onclick=()=>{selected=x.dataset.seg!;editor()});const timeline=$('#timeline');$('#zoom').oninput=e=>timeline.style.setProperty('--zoom',String(Number((e.target as HTMLInputElement).value)/100));bindInspector()}
-function stamp(){const a=flatten(project!.lyricBlocks);if(!a[stampIndex])return;change(()=>{const now=audio.currentTime,s=a[stampIndex].segment;if(stampIndex>0){const prev=a[stampIndex-1].segment;if(prev.end<=prev.start)prev.end=Math.max(prev.start+.05,now)}s.start=now;s.end=now+.35;selected=s.id;stampIndex++},false);editor()}
-function keys(e:KeyboardEvent){if((e.target as HTMLElement).matches('input,textarea,select'))return;if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redo():undo();return}if(step!==3)return;if(e.code==='Space'){e.preventDefault();stamp()}else if(e.key.toLowerCase()==='k')audio.paused?audio.play():audio.pause();else if(e.key==='Backspace'){e.preventDefault();if(stampIndex){stampIndex--;const s=flatten(project!.lyricBlocks)[stampIndex].segment;change(()=>{s.start=0;s.end=0});editor()}}else if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&selected){e.preventDefault();const d=(e.key==='ArrowLeft'?-1:1)*(e.shiftKey?.05:.01);const s=findSegment(selected)!;change(()=>{s.start=Math.max(0,s.start+d);s.end=Math.max(s.start+.01,s.end+d)});editor()}}
-function bindInspector(){const s=findSegment(selected);if(!s)return;for(const key of ['start','end']as const){const el=document.querySelector<HTMLInputElement>(`#seg-${key}`);if(el)el.onchange=()=>change(()=>s[key]=Math.max(key==='end'?s.start+.01:0,Number(el.value)))}document.querySelectorAll<HTMLElement>('[data-nudge]').forEach(x=>x.onclick=()=>change(()=>{const d=Number(x.dataset.nudge)/1000;s.start=Math.max(0,s.start+d);s.end=Math.max(s.start+.01,s.end+d)}));$('#split').onclick=()=>change(()=>{const entry=flatten(project!.lyricBlocks).find(x=>x.segment.id===s.id)!;const parts=[...s.text];if(parts.length<2)return;entry.block.segments.splice(entry.si,1,...parts.map((text,i)=>({id:uid(),text,start:s.start+(s.end-s.start)*i/parts.length,end:s.start+(s.end-s.start)*(i+1)/parts.length})))});$('#merge').onclick=()=>change(()=>{const entry=flatten(project!.lyricBlocks).find(x=>x.segment.id===s.id)!;const n=entry.block.segments[entry.si+1];if(n){s.text+=n.text;s.end=n.end;entry.block.segments.splice(entry.si+1,1)}})}
-function designStep(){const presets:[Preset,string,string][]=[['classic','Classic Karaoke','익숙하고 선명한 네이비'],['stage','Stage Light','보랏빛 무대 조명'],['dream','Dream','별빛 같은 감성 무대'],['classroom','Classroom Pop','밝고 산뜻한 교실'],['retro','Retro Pop','리듬감 있는 컬러'],['minimal','Minimal','텍스트 중심의 절제된 화면']];return`<h1>4. 디자인</h1><h2>무대 프리셋</h2><div class="preset-grid">${presets.map(([id,n,d])=>`<button data-preset="${id}" class="preset ${project!.style.preset===id?'chosen':''}"><i class="p-${id}"></i><b>${n}</b><span>${d}</span></button>`).join('')}</div><h2>노래방 글꼴</h2><div class="font-grid">${fonts.map(([f,n],i)=>`<button data-font="${f}" class="font ${project!.style.fontFamily===f?'chosen':''}" style="font-family:'${f}'"><b>${n}</b><span>우리 함께 노래해요!</span>${i===0?'<em>⭐ 기본</em>':''}</button>`).join('')}</div><label class="button">+ 내 글꼴 추가<input id="font-file" type="file" accept=".otf,.ttf,font/otf,font/ttf"></label><p class="muted">추가 글꼴의 이용 조건은 사용자가 직접 확인해야 합니다.</p><div class="settings"><label>진행 색상 <select id="color-mode"><option value="common">공통 노란색</option>${project!.musicalMode?`<option value="role" ${project!.style.colorMode==='role'?'selected':''}>배역별 색상</option>`:''}</select></label><label><input id="progress" type="checkbox" ${project!.style.progress?'checked':''}> 진행바 표시</label><label>배경 이미지 <input id="bg-file" type="file" accept="image/png,image/jpeg,image/webp"></label><label>밝기 <input id="brightness" type="range" min="30" max="120" value="${project!.style.brightness}"></label><label>어둡게 <input id="darken" type="range" min="0" max="80" value="${project!.style.darken}"></label><label>흐림 <input id="blur" type="range" min="0" max="20" value="${project!.style.blur}"></label></div><canvas id="design-preview" width="960" height="540"></canvas>`}
-function bindDesign(){document.querySelectorAll<HTMLElement>('[data-preset]').forEach(x=>x.onclick=()=>change(()=>project!.style.preset=x.dataset.preset as Preset));document.querySelectorAll<HTMLElement>('[data-font]').forEach(x=>x.onclick=()=>change(()=>project!.style.fontFamily=x.dataset.font!));$('#font-file').onchange=async e=>{const f=(e.target as HTMLInputElement).files?.[0];if(!f)return;try{fontBlob=f;project!.style.fontFamily=await loadCustomFont(f);save();editor()}catch{alert('글꼴을 불러오지 못했어요. OTF 또는 TTF 파일을 확인해 주세요.')}};$('#bg-file').onchange=e=>{const f=(e.target as HTMLInputElement).files?.[0];if(f)setBackground(f)};$<HTMLSelectElement>('#color-mode').onchange=e=>change(()=>project!.style.colorMode=(e.target as HTMLSelectElement).value as 'common'|'role');$<HTMLInputElement>('#progress').onchange=e=>change(()=>project!.style.progress=(e.target as HTMLInputElement).checked);for(const k of ['brightness','darken','blur']as const)$<HTMLInputElement>(`#${k}`).oninput=e=>{project!.style[k]=Number((e.target as HTMLInputElement).value);drawDesign()};drawDesign()}
-function drawDesign(){const c=document.querySelector<HTMLCanvasElement>('#design-preview');if(!c)return;const x=c.getContext('2d')!;x.save();x.scale(.5,.5);renderFrame(x,project!,audio.currentTime||project!.lyricBlocks[0]?.segments[0]?.start||0,bgImage);x.restore()}
-function setBackground(blob:Blob){bgBlob=blob;if(bgUrl)URL.revokeObjectURL(bgUrl);bgUrl=URL.createObjectURL(blob);bgImage=new Image();bgImage.onload=()=>{save();editor()};bgImage.src=bgUrl}
-function exportStep(){const s=exportSupport(),timed=flatten(project!.lyricBlocks).filter(x=>x.segment.end>x.segment.start).length,total=flatten(project!.lyricBlocks).length;return`<h1>5. 내보내기</h1><p>미리보기와 동일한 프레임 계산으로 영상을 만들어요.</p><div class="checklist"><div><span>${audioBlob?'✓':'!'}</span><b>반주</b><small>${audioBlob?esc(project!.media.name):'반주가 필요해요'}</small></div><div><span>${timed===total&&total?'✓':'!'}</span><b>타이밍</b><small>${timed} / ${total} 음절 완료</small></div><div><span>${s.type.includes('mp4')?'✓':'!'}</span><b>MP4 호환성</b><small>${s.type.includes('mp4')?'빠른 영상 만들기를 사용할 수 있어요.':'이 브라우저는 MP4 녹화를 지원하지 않아요.'}</small></div></div><section class="export-card"><h2>${esc(project!.meta.title)}</h2><p>1920 × 1080 · 30fps · MP4 (H.264/AAC) · ${fmt(project!.media.duration)}</p><button id="export" class="primary" ${!audioBlob||!total||timed!==total||!s.type.includes('mp4')?'disabled':''}>MP4 만들기</button><button id="package">프로젝트 파일 저장</button><div id="progress-box" hidden><b id="stage">준비 중</b><progress id="render-progress" max="100" value="0"></progress><output id="percent">0%</output><button id="cancel">취소</button></div><div id="complete"></div></section>`}
-function bindExport(){$('#package').onclick=downloadPackage;$('#export').onclick=async()=>{const ctl=new AbortController();$<HTMLDivElement>('#progress-box').hidden=false;$<HTMLButtonElement>('#export').disabled=true;$('#cancel').onclick=()=>ctl.abort();try{const blob=await exportVideo(project!,audio,bgImage,s=>{$<HTMLProgressElement>('#render-progress').value=s.percent;$('#stage').textContent=s.stage;$('#percent').textContent=`${s.percent}%`},ctl.signal);const u=URL.createObjectURL(blob);$('#complete').innerHTML=`<div class="success"><h2>영상 완성!</h2><p>${esc(project!.meta.title)} · 1920×1080 · 30fps · MP4</p><a class="primary button" download="${esc(project!.meta.title)}.mp4" href="${u}">MP4 저장하기</a></div>`}catch(e){if((e as Error).name!=='AbortError')alert((e as Error).message||'영상을 만들지 못했어요. 메모리를 확보한 뒤 다시 시도해 주세요.')}finally{$<HTMLButtonElement>('#export').disabled=false}}}
-async function blobData(b?:Blob){if(!b)return null;const bytes=new Uint8Array(await b.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));return{type:b.type,data:btoa(binary)}}
-function fromData(x:{type:string;data:string}|null){if(!x)return undefined;const s=atob(x.data),a=new Uint8Array(s.length);for(let i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return new Blob([a],{type:x.type})}
-async function downloadPackage(){const payload={format:'mkaraoke',project:structuredClone(project!),audio:await blobData(audioBlob),background:await blobData(bgBlob),font:await blobData(fontBlob)};const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:'application/json'}));a.download=`${project!.meta.title}.mkaraoke`;a.click()}
-async function importPackage(e:Event){const f=(e.target as HTMLInputElement).files?.[0];if(!f)return;try{const x=JSON.parse(await f.text());if(x.format!=='mkaraoke'||x.project?.version!==1)throw 0;project=normalizeProject(x.project);audioBlob=fromData(x.audio);bgBlob=fromData(x.background);fontBlob=fromData(x.font);if(audioBlob)setAudio(audioBlob,project!.media.name);if(bgBlob)setBackground(bgBlob);if(fontBlob)project!.style.fontFamily=await loadCustomFont(new File([fontBlob],'custom.otf'));await saveProject(project!,{audio:audioBlob,background:bgBlob,font:fontBlob});editor()}catch{alert('프로젝트 파일을 읽지 못했어요. 올바른 .mkaraoke 파일인지 확인해 주세요.')}}
-function snapshot(){return structuredClone(project!)}function change(fn:()=>void,rerender=true){history.push(snapshot());if(history.length>50)history.shift();future=[];fn();save();if(rerender)editor()}function undo(){if(!history.length)return;future.push(snapshot());project=history.pop()!;save();editor()}function redo(){if(!future.length)return;history.push(snapshot());project=future.pop()!;save();editor()}function save(){clearTimeout(dirtyTimer);dirtyTimer=window.setTimeout(()=>saveProject(project!,{audio:audioBlob,background:bgBlob,font:fontBlob}).then(()=>{const x=document.querySelector('#saved');if(x)x.textContent='✓ 자동 저장됨'}).catch(()=>{const x=document.querySelector('#saved');if(x)x.textContent='저장 공간을 확인해 주세요'}),350)}
-window.addEventListener('keydown',keys);loadBuiltins().then(f=>{if(f.includes('TJ Joy'))console.warn('첨부 TJ 폰트를 찾지 못해 Noto Sans KR로 대체합니다.')}).finally(home);
+import { migrate, type KaraokeProject } from './types.js';
+import { audio, computePeaks, setRate, setSource, setVolume } from './lib/audio.js';
+import { loadBuiltins, loadCustomFont, resolveFamily } from './lib/fonts.js';
+import { timedCount } from './lib/lyrics.js';
+import { adopt, create, hydrateFiles, onSaveState, project, resetSession, save, saveState, setBackground, state, undo, redo, notify } from './lib/store.js';
+import { loadProjects, removeProject } from './lib/storage.js';
+import { acceptAudio, prepareScreen } from './lib/ui/prepare.js';
+import { clearStudioHooks, nudgeSelected, studioScreen, studioStamp, studioToggle, stopStudio } from './lib/ui/studio.js';
+import { finishScreen, stopFinish } from './lib/ui/finish.js';
+import { button, clock, confirmDialog, dropzone, el, icon, toast } from './lib/ui/shell.js';
+
+const app = document.getElementById('app')!;
+const THEME_KEY = 'yeogi-theme';
+
+// ── 테마 ────────────────────────────────────────────────
+function applyTheme(dark: boolean) {
+  state.dark = dark;
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  try {
+    localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light');
+  } catch {
+    /* 시크릿 모드 */
+  }
+}
+
+function initTheme() {
+  let stored: string | null = null;
+  try {
+    stored = localStorage.getItem(THEME_KEY);
+  } catch {
+    /* 무시 */
+  }
+  applyTheme(stored ? stored === 'dark' : true);
+}
+
+// ── 껍데기 ──────────────────────────────────────────────
+function chrome(body: HTMLElement, opts: { steps?: boolean } = {}): void {
+  const header = el('header', { class: 'app-bar' });
+  const brand = button({
+    kind: 'ghost',
+    icon: 'graphic_eq',
+    label: '여기 있어 노래방',
+    onClick: () => (state.project ? confirmHome() : home()),
+  });
+  brand.classList.add('brand');
+  header.append(brand);
+
+  if (opts.steps && state.project) header.append(stepNav());
+
+  const right = el('div', { class: 'app-bar-right' });
+  if (state.project) right.append(saveBadge());
+  right.append(
+    button({
+      kind: 'ghost',
+      icon: state.dark ? 'light_mode' : 'dark_mode',
+      title: state.dark ? '밝은 화면으로' : '어두운 화면으로',
+      onClick: () => {
+        applyTheme(!state.dark);
+        render();
+      },
+    }),
+  );
+  header.append(right);
+
+  const footer = el('footer', { class: 'chichiboo-footer' }, [
+    el('a', { href: 'https://litt.ly/chichiboo', target: '_blank', rel: 'noopener noreferrer' }, [icon('auto_stories'), el('span', { textContent: 'Created by. 교육뮤지컬 꿈꾸는 치수쌤' })]),
+  ]);
+
+  app.replaceChildren(header, el('main', { class: 'app-main' }, [body]), footer);
+}
+
+function stepNav(): HTMLElement {
+  const nav = el('nav', { class: 'steps' });
+  nav.setAttribute('aria-label', '만들기 단계');
+  const labels: [1 | 2 | 3, string, string][] = [
+    [1, '준비', 'library_music'],
+    [2, '타이밍', 'ads_click'],
+    [3, '꾸미기', 'palette'],
+  ];
+  for (const [n, label, ic] of labels) {
+    const b = button({ kind: 'ghost', icon: ic, label, onClick: () => go(n) });
+    b.classList.add('step');
+    if (state.step === n) {
+      b.classList.add('is-active');
+      b.setAttribute('aria-current', 'step');
+    }
+    nav.append(b);
+  }
+  return nav;
+}
+
+function saveBadge(): HTMLElement {
+  const badge = el('span', { class: 'save-badge' });
+  const paint = (s: typeof saveState) => {
+    badge.className = `save-badge is-${s}`;
+    badge.replaceChildren(
+      icon(s === 'error' ? 'cloud_off' : s === 'saving' ? 'sync' : 'cloud_done'),
+      el('span', { textContent: s === 'error' ? '저장 실패' : s === 'saving' ? '저장 중' : '자동 저장됨' }),
+    );
+  };
+  paint(saveState);
+  onSaveState(paint);
+  return badge;
+}
+
+// ── 라우팅 ──────────────────────────────────────────────
+function teardown() {
+  stopStudio();
+  stopFinish();
+  clearStudioHooks();
+}
+
+export function go(step: 1 | 2 | 3): void {
+  state.step = step;
+  render();
+}
+
+function render(): void {
+  teardown();
+  if (!state.project) return void home();
+  const body = state.step === 1 ? prepareScreen(render, go) : state.step === 2 ? studioScreen(render, go) : finishScreen(render, go);
+  chrome(body, { steps: true });
+  // 스크린리더가 새 화면의 시작을 읽도록 제목으로 포커스를 옮긴다.
+  const heading = body.querySelector('h1, h2');
+  if (heading instanceof HTMLElement) {
+    heading.tabIndex = -1;
+    heading.focus({ preventScroll: true });
+  }
+}
+
+async function confirmHome() {
+  const ok = await confirmDialog({ title: '처음 화면으로 갈까요?', body: '지금까지 만든 것은 자동으로 저장돼 있어요. 언제든 다시 열 수 있습니다.', confirm: '처음 화면으로' });
+  if (ok) {
+    audio.pause();
+    resetSession();
+    state.project = null;
+    home();
+  }
+}
+
+// ── 홈 ─────────────────────────────────────────────────
+async function home(): Promise<void> {
+  teardown();
+  const recent = await loadProjects().catch(() => []);
+  const canRecord = typeof MediaRecorder !== 'undefined';
+
+  const hero = el('section', { class: 'hero' }, [
+    el('span', { class: 'hero-tag' }, [icon('lock'), el('span', { textContent: '모두 이 브라우저 안에서 처리돼요' })]),
+    el('h1', {}, [el('span', { textContent: '반주와 가사만 있으면' }), el('em', { textContent: '노래방 영상 완성' })]),
+    el('p', { class: 'lead', textContent: '노래를 들으면서 가사 한 줄마다 스페이스바를 한 번씩. 그것만 하면 됩니다. 나머지는 자동으로 맞춰져요.' }),
+    el('div', { class: 'row' }, [
+      button({ kind: 'primary', icon: 'add', label: '새 노래 만들기', onClick: createDialog }),
+      openFileButton(),
+    ]),
+    el('div', { class: 'how' }, [
+      step('library_music', '반주와 가사 넣기', 'MP3와 가사를 붙여넣기'),
+      step('ads_click', '줄마다 한 번 찍기', '한 곡에 20~40번이면 끝'),
+      step('movie', '영상으로 저장', 'MP4로 내려받기'),
+    ]),
+  ]);
+
+  if (!canRecord) {
+    hero.append(el('p', { class: 'notice' }, [icon('info'), el('span', { textContent: '이 브라우저는 영상 저장을 지원하지 않아요. 만들기는 되지만 저장하려면 컴퓨터의 Chrome이나 Edge가 필요합니다.' })]));
+  }
+
+  const body = el('div', { class: 'screen screen-home' }, [hero]);
+
+  if (recent.length) {
+    const list = el('div', { class: 'recent-grid' });
+    for (const p of recent) {
+      const card = el('article', { class: 'recent-card' });
+      const openBtn = el('button', { class: 'recent-open', type: 'button' }, [
+        el('b', { textContent: p.meta.title || '제목 없음' }),
+        el('small', { textContent: `${p.blocks.length}줄 · 타이밍 ${timedCount(p.blocks)}줄 · ${new Date(p.updatedAt).toLocaleDateString('ko-KR')}` }),
+      ]);
+      openBtn.onclick = () => openRecent(p);
+      card.append(
+        openBtn,
+        button({
+          kind: 'ghost',
+          icon: 'delete_outline',
+          title: `${p.meta.title} 삭제`,
+          onClick: async () => {
+            const ok = await confirmDialog({ title: '이 작업을 지울까요?', body: `"${p.meta.title}"을(를) 지우면 되돌릴 수 없어요.`, confirm: '지우기', danger: true });
+            if (!ok) return;
+            await removeProject(p.id);
+            toast('지웠어요.');
+            home();
+          },
+        }),
+      );
+      list.append(card);
+    }
+    body.append(el('section', { class: 'panel' }, [el('div', { class: 'panel-head' }, [el('h2', { textContent: '이어서 만들기' })]), list]));
+  }
+
+  chrome(body);
+
+  // 홈에서 음원을 끌어다 놓으면 바로 새 프로젝트로 시작한다.
+  dropzone(
+    body,
+    (f) => /^audio\//.test(f.type) || /\.(mp3|wav|m4a|aac)$/i.test(f.name),
+    async (f) => {
+      create(f.name.replace(/\.[^.]+$/, ''));
+      await acceptAudio(f, () => undefined);
+      go(1);
+    },
+  );
+}
+
+function step(ic: string, title: string, detail: string): HTMLElement {
+  return el('div', { class: 'how-step' }, [icon(ic), el('b', { textContent: title }), el('small', { textContent: detail })]);
+}
+
+function createDialog(): void {
+  const dlg = el('dialog', { class: 'dialog' });
+  const form = el('form', { class: 'stack' });
+  const title = el('input', { class: 'input', name: 'title', required: true, placeholder: '예) 여기 있어' });
+  title.setAttribute('aria-label', '곡 제목');
+  const musical = el('input', { class: 'input', name: 'musical', placeholder: '예) 우리들의 봄' });
+  musical.setAttribute('aria-label', '작품명');
+  form.append(
+    el('label', { class: 'field' }, [el('span', { textContent: '곡 제목 *' }), title]),
+    el('label', { class: 'field' }, [el('span', { textContent: '작품명 (선택)' }), musical]),
+    el('div', { class: 'dialog-actions' }, [
+      button({ kind: 'ghost', label: '취소', onClick: () => (dlg.close(), dlg.remove()) }),
+      el('button', { class: 'btn btn-primary', type: 'submit', textContent: '시작하기' }),
+    ]),
+  );
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    if (!title.value.trim()) return;
+    dlg.close();
+    dlg.remove();
+    create(title.value.trim(), { musical: musical.value.trim() });
+    go(1);
+  };
+  dlg.append(el('h2', { textContent: '새 노래 만들기' }), form);
+  document.body.append(dlg);
+  dlg.showModal();
+  title.focus();
+}
+
+async function openRecent(meta: KaraokeProject): Promise<void> {
+  const files = await hydrateFiles(meta.id);
+  adopt(meta, files);
+  await restoreFiles();
+  go(state.project!.media.name ? 2 : 1);
+}
+
+/** 저장된 파일을 오디오 엔진·배경·글꼴에 되살린다. */
+async function restoreFiles(): Promise<void> {
+  const p = project();
+  if (state.files.audio) {
+    try {
+      p.media.duration = await setSource(state.files.audio);
+      computePeaks(state.files.audio).catch(() => undefined);
+    } catch {
+      toast('저장된 반주를 불러오지 못했어요. 다시 넣어 주세요.', 'error');
+    }
+  }
+  if (state.files.background) await setBackground(state.files.background);
+  if (state.files.font) {
+    try {
+      await loadCustomFont(new File([state.files.font], 'custom.otf'));
+    } catch {
+      /* 사용자 글꼴 복원 실패는 치명적이지 않다 */
+    }
+  }
+  // V1은 저장된 fontBlob이 있으면 사용자의 나중 선택을 무시하고 항상 덮어썼다.
+  p.style.fontFamily = resolveFamily(p.style.fontFamily);
+  setVolume(p.timing.volume);
+  setRate(p.timing.rate);
+  save();
+}
+
+// ── 프로젝트 파일 (.mkaraoke) ─────────────────────────────
+function openFileButton(): HTMLElement {
+  const input = el('input', { type: 'file', accept: '.mkaraoke,application/json', class: 'visually-hidden' });
+  const b = button({ kind: 'secondary', icon: 'folder_open', label: '저장한 작업 열기', onClick: () => input.click() });
+  input.onchange = async () => {
+    const f = input.files?.[0];
+    input.value = '';
+    if (f) await importPackage(f);
+  };
+  return el('span', { class: 'file-picker' }, [b, input]);
+}
+
+async function importPackage(file: File): Promise<void> {
+  try {
+    const raw = JSON.parse(await file.text()) as { format?: string; project?: unknown; audio?: Encoded; background?: Encoded; font?: Encoded };
+    if (raw.format !== 'mkaraoke' || !raw.project) throw new Error('형식이 다릅니다');
+    const p = migrate(raw.project as KaraokeProject);
+    const existing = (await loadProjects().catch(() => [])).find((x) => x.id === p.id);
+    if (existing) {
+      const ok = await confirmDialog({ title: '같은 작업이 이미 있어요', body: `"${existing.meta.title}"을(를) 이 파일의 내용으로 바꿀까요?`, confirm: '덮어쓰기', danger: true });
+      if (!ok) return;
+    }
+    adopt(p, { audio: decode(raw.audio), background: decode(raw.background), font: decode(raw.font) });
+    await restoreFiles();
+    toast('작업을 열었어요.', 'success');
+    go(state.project!.media.name ? 2 : 1);
+  } catch {
+    toast('이 파일은 열 수 없어요. .mkaraoke 파일인지 확인해 주세요.', 'error');
+  }
+}
+
+type Encoded = { type: string; data: string } | null | undefined;
+
+function decode(x: Encoded): Blob | undefined {
+  if (!x) return undefined;
+  const bin = atob(x.data);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: x.type });
+}
+
+async function encode(b?: Blob): Promise<Encoded> {
+  if (!b) return null;
+  const bytes = new Uint8Array(await b.arrayBuffer());
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 32768) s += String.fromCharCode(...bytes.subarray(i, i + 32768));
+  return { type: b.type, data: btoa(s) };
+}
+
+export async function downloadPackage(): Promise<void> {
+  const p = project();
+  toast('작업 파일을 만드는 중이에요…');
+  const payload = {
+    format: 'mkaraoke',
+    project: structuredClone(p),
+    audio: await encode(state.files.audio),
+    background: await encode(state.files.background),
+    font: await encode(state.files.font),
+  };
+  const a = el('a', { href: URL.createObjectURL(new Blob([JSON.stringify(payload)], { type: 'application/json' })), download: `${p.meta.title || '노래방'}.mkaraoke` });
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── 전역 단축키 ──────────────────────────────────────────
+function isTyping(t: EventTarget | null): boolean {
+  return t instanceof HTMLElement && (t.matches('input, textarea, select') || t.isContentEditable);
+}
+
+window.addEventListener('keydown', (e) => {
+  if (isTyping(e.target)) return;
+  const mod = e.ctrlKey || e.metaKey;
+
+  if (mod && e.key.toLowerCase() === 'z') {
+    e.preventDefault();
+    const ok = e.shiftKey ? redo() : undo();
+    toast(ok ? (e.shiftKey ? '다시 실행했어요.' : '되돌렸어요.') : '더 이상 없어요.');
+    if (ok) render();
+    return;
+  }
+  if (mod && e.key.toLowerCase() === 's') {
+    e.preventDefault();
+    if (state.project) downloadPackage();
+    return;
+  }
+  if (!state.project || state.step !== 2) return;
+
+  if (e.code === 'Space') {
+    e.preventDefault();
+    studioStamp?.(e.timeStamp);
+  } else if (e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    studioToggle?.();
+  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    const dir = e.key === 'ArrowRight' ? 1 : -1;
+    if (e.shiftKey || e.altKey) {
+      if (nudgeSelected(dir * (e.shiftKey ? 50 : 10))) e.preventDefault();
+    } else {
+      e.preventDefault();
+      audio.currentTime = Math.max(0, audio.currentTime + dir * 2);
+    }
+  }
+});
+
+// 페이지 밖으로 파일을 놓아 작업이 날아가는 것을 막는다.
+for (const type of ['dragover', 'drop'] as const) {
+  window.addEventListener(type, (e) => {
+    if (!(e.target as HTMLElement)?.closest?.('.dropzone, .screen-home')) e.preventDefault();
+  });
+}
+
+window.addEventListener('beforeunload', () => audio.pause());
+
+// ── 시작 ───────────────────────────────────────────────
+initTheme();
+onSaveStateNoop();
+function onSaveStateNoop() {
+  /* saveBadge가 구독을 건다. 여기서는 초기화만. */
+}
+
+loadBuiltins()
+  .then((list) => {
+    const missing = list.filter((f) => f.url && !f.ready);
+    if (missing.length === list.filter((f) => f.url).length) {
+      console.warn('내장 글꼴 파일이 없어 기본 글꼴로 표시됩니다.');
+    }
+  })
+  .catch(() => undefined)
+  .finally(() => {
+    notify();
+    home();
+  });
+
+export { clock };
