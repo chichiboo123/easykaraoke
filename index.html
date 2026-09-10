@@ -1,11 +1,27 @@
 <!doctype html>
-<html lang="ko">
+<html lang="ko" data-theme="dark">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#34256d">
+    <meta name="theme-color" content="#111019">
+    <meta name="description" content="반주와 가사만 있으면 브라우저에서 바로 만드는 노래방 영상 편집기. 모든 작업은 내 컴퓨터 안에서만 처리됩니다.">
     <title>여기 있어 노래방</title>
-    <link rel="stylesheet" href="./styles.css?v=1.0.2">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- 앱 자체 스타일만 렌더링을 막는다. -->
+    <link rel="stylesheet" href="./styles.css?v=2.1.0">
+
+    <!-- 아래 글꼴들은 비차단으로 불러온다.
+         <link rel="stylesheet">는 렌더링 차단 자원이라, 학교 방화벽처럼 CDN이 느린 곳에서는
+         글꼴 하나 때문에 앱 화면 전체가 뜨지 않는다. media=print로 받아 놓고 onload에서 적용한다.
+         구글은 한글을 unicode-range 조각으로 나눠 주므로 실제로 쓰는 글자만 내려온다.
+         못 불러오면 해당 글꼴 카드가 "못 불러옴"으로 비활성 처리된다. -->
+    <link rel="stylesheet" media="print" onload="this.media='all'"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <link rel="stylesheet" media="print" onload="this.media='all'"
+          href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined">
+    <link rel="stylesheet" media="print" onload="this.media='all'"
+          href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&family=Gowun+Dodum&family=Jua&family=Noto+Sans+KR:wght@400;700&display=swap">
   </head>
   <body>
     <div id="app">
@@ -15,10 +31,41 @@
       </main>
     </div>
     <script>
-      window.addEventListener('error', function () {
+      // 저장된 테마를 첫 페인트 전에 적용해 깜빡임을 없앤다.
+      try {
+        var t = localStorage.getItem('yeogi-theme');
+        if (t) document.documentElement.dataset.theme = t;
+      } catch (e) {}
+
+      // 아이콘 폰트가 없으면(오프라인·차단) 리거처가 안 돼 "play_arrow" 글자가 그대로 보인다.
+      // fonts.check()는 일치하는 @font-face가 아예 없을 때도 true를 돌려주므로 폭으로 판정한다.
+      // 아이콘을 숨겨도 모든 버튼에 라벨이나 aria-label이 있어 기능은 그대로다.
+      document.documentElement.classList.add('no-icons');
+      (function () {
+        function iconsReady() {
+          var probe = document.createElement('span');
+          probe.textContent = 'play_arrow';
+          probe.style.cssText = 'position:absolute;left:-9999px;top:0;font-size:48px;white-space:nowrap;';
+          probe.style.fontFamily = 'monospace';
+          document.body.appendChild(probe);
+          var plain = probe.offsetWidth;
+          probe.style.fontFamily = '"Material Icons Outlined", monospace';
+          var iconic = probe.offsetWidth;
+          probe.remove();
+          // 리거처가 적용되면 열 글자가 정사각형 하나로 합쳐져 폭이 크게 줄어든다.
+          return iconic > 0 && iconic < plain * 0.6;
+        }
+        function settle() {
+          if (iconsReady()) document.documentElement.classList.remove('no-icons');
+        }
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(settle);
+        window.setTimeout(settle, 1200);
+      })();
+
+      window.addEventListener('error', function (e) {
         var app = document.getElementById('app');
         if (app && app.querySelector('.boot-status')) {
-          app.innerHTML = '<main class="boot-status boot-error"><strong>앱을 불러오지 못했어요.</strong><span>GitHub Actions의 Pages 배포 기록과 브라우저 콘솔을 확인해 주세요.</span></main>';
+          app.innerHTML = '<main class="boot-status boot-error"><strong>앱을 불러오지 못했어요.</strong><span>브라우저를 새로고침하거나 최신 Chrome · Edge에서 열어 주세요.</span></main>';
         }
       });
       window.setTimeout(function () {
@@ -28,6 +75,6 @@
         }
       }, 8000);
     </script>
-    <script type="module" src="./app.js?v=1.0.2"></script>
+    <script type="module" src="./app.js?v=2.1.0"></script>
   </body>
 </html>
