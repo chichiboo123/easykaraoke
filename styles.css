@@ -63,6 +63,10 @@
 
 * { box-sizing: border-box; }
 
+/* hidden 속성은 어떤 클래스 규칙보다 우선해야 한다.
+   UA 스타일시트의 display:none은 클래스 선택자에 지므로 여기서 못박는다. */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; }
 
 body {
@@ -139,14 +143,16 @@ html.no-icons .btn-iconly::after { content: attr(aria-label); font-size: var(--t
 }
 .brand { font-weight: 800; font-size: 16px; color: var(--ink); }
 .brand .mi { color: var(--accent); }
-.app-bar-right { margin-left: auto; display: flex; align-items: center; gap: var(--s2); }
+.app-bar-right { margin-left: auto; display: flex; align-items: center; gap: var(--s2); flex: none; }
 
-.steps { display: flex; gap: var(--s1); overflow-x: auto; }
+.steps { display: flex; gap: var(--s1); overflow-x: auto; scrollbar-width: none; min-width: 0; }
+.steps::-webkit-scrollbar { display: none; }
+.steps .step { flex: none; }
 .steps .step { font-size: var(--t-small); padding: 7px var(--s3); min-height: 36px; }
 .steps .step .mi { font-size: 18px; }
 .steps .is-active { background: var(--accent-soft); color: var(--accent-ink); font-weight: 700; }
 
-.save-badge { display: inline-flex; align-items: center; gap: 5px; font-size: var(--t-caption); color: var(--subtle); }
+.save-badge { display: inline-flex; align-items: center; gap: 5px; font-size: var(--t-caption); color: var(--subtle); white-space: nowrap; flex: none; }
 .save-badge .mi { font-size: 15px; }
 .save-badge.is-saving .mi { animation: spin 1.4s linear infinite; }
 .save-badge.is-error { color: var(--color-error); }
@@ -227,12 +233,60 @@ html.no-icons .btn-iconly::after { content: attr(aria-label); font-size: var(--t
 .check input { accent-color: var(--accent); width: 18px; height: 18px; }
 
 /* ── 만들기 화면 ──────────────────────────────────────── */
-.stage { border-radius: var(--r-lg); overflow: hidden; background: #0B0A14; box-shadow: var(--shadow); display: flex; justify-content: center; }
+.stage { border-radius: var(--r-lg); overflow: hidden; background: #0B0A14; box-shadow: var(--shadow); display: flex; align-items: center; justify-content: center; }
+
+/* ── 편집기 셸 (VREW·캡컷 배치) ─────────────────────────────
+   왼쪽에 미리보기, 오른쪽에 목록/설정, 아래 전체 폭에 타임라인.
+   페이지 자체가 스크롤되지 않고 안쪽 패널만 스크롤하므로,
+   미리보기가 아래 내용을 가리는 일이 구조적으로 불가능하다. */
+#app.is-editor { height: 100dvh; overflow: hidden; }
+#app.is-editor .app-main { flex: 1; min-height: 0; display: flex; }
+#app.is-editor .chichiboo-footer { padding-block: 6px; }
+
+.editor-shell {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: var(--s3) max(var(--s3), 1.5vw);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(320px, 30%, 420px);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--s3);
+}
+.editor-shell-finish { grid-template-rows: minmax(0, 1fr); }
+
+.editor-stage {
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+.editor-stage .stage { flex: 1 1 auto; min-height: 0; }
+.editor-stage .preview { width: 100%; height: 100%; aspect-ratio: auto; object-fit: contain; }
+
+.editor-side {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding-right: var(--s1);
+}
+.editor-bottom { grid-column: 1 / -1; grid-row: 2; display: flex; flex-direction: column; gap: var(--s2); }
+
+.side-head { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s3); align-items: baseline; }
+.side-foot { margin-top: auto; padding-top: var(--s3); border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: var(--s2); }
+.side-foot .btn { flex: 1; }
+.transport-slim { flex: none; }
 /* 찍는 동안 미리보기·트랜스포트·타임라인·찍기 패널이 한 화면에 같이 보여야 한다.
    V1은 이것들이 서로 다른 단계에 흩어져 있었다. */
-.screen-studio .preview { max-height: min(30vh, 260px); width: auto; }
-.studio-top { position: sticky; top: 56px; z-index: 6; display: flex; flex-direction: column; gap: var(--s3); background: var(--ground); padding-block: var(--s2); }
-.stage-sticky { position: sticky; top: 64px; z-index: 5; }
 .preview { display: block; width: 100%; aspect-ratio: 16 / 9; max-width: 100%; }
 
 .transport {
@@ -270,12 +324,20 @@ html.no-icons .btn-iconly::after { content: attr(aria-label); font-size: var(--t
 
 .block-head { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); align-items: baseline; }
 .block-list { display: flex; flex-direction: column; gap: var(--s1); }
+/* 사이드 패널은 좁다. VREW의 자막 클립 카드처럼 위에 시각·조작, 아래에 가사 전체 폭. */
 .block-card {
-  display: grid; grid-template-columns: 32px 128px 1fr auto; gap: var(--s3); align-items: center;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  grid-template-areas: 'num time actions' 'num text text';
+  gap: 2px var(--s2); align-items: center;
   padding: var(--s2) var(--s3);
   background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--role, var(--line-strong));
   border-radius: var(--r-md);
 }
+.block-card .block-num { grid-area: num; }
+.block-card .block-time { grid-area: time; justify-self: start; }
+.block-card .block-text { grid-area: text; }
+.block-card .block-actions { grid-area: actions; }
 .block-card.is-selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .block-card.is-next { background: var(--accent-soft); }
 .block-card.is-untimed { border-left-color: var(--line); }
@@ -283,7 +345,7 @@ html.no-icons .btn-iconly::after { content: attr(aria-label); font-size: var(--t
 .block-time { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; padding: 4px 6px; border-radius: var(--r-sm); font-variant-numeric: tabular-nums; font-size: var(--t-small); }
 .block-time:hover { background: var(--surface-2); }
 .block-time small { color: var(--subtle); }
-.block-text { min-width: 0; padding: 7px var(--s2); border: 1px solid transparent; border-radius: var(--r-sm); background: transparent; color: var(--ink); font: inherit; }
+.block-text { min-width: 0; width: 100%; padding: 6px var(--s2); border: 1px solid transparent; border-radius: var(--r-sm); background: transparent; color: var(--ink); font: inherit; font-weight: 600; }
 .block-text:hover { border-color: var(--line); }
 .block-text:focus { outline: none; border-color: var(--accent); background: var(--surface); }
 .block-actions { display: flex; align-items: center; gap: var(--s1); }
@@ -353,17 +415,21 @@ html.no-icons .btn-iconly::after { content: attr(aria-label); font-size: var(--t
 .boot-error strong { color: var(--color-error); }
 
 /* ── 반응형 ──────────────────────────────────────────── */
+@media (max-width: 560px) {
+  .save-badge span:not(.mi) { display: none; }
+}
+
 @media (max-width: 720px) {
-  .block-card { grid-template-columns: 26px 1fr auto; grid-template-areas: 'num time actions' 'num text text'; row-gap: var(--s1); }
-  .block-num { grid-area: num; }
-  .block-time { grid-area: time; }
-  .block-text { grid-area: text; }
-  .block-actions { grid-area: actions; }
-  .studio-top, .stage-sticky { position: static; }
-  .screen-studio .preview { max-height: 26vh; }
+  /* 좁은 화면에서는 고정 높이 편집기 대신 일반 스크롤로 돌아간다.
+     미리보기를 sticky로 두면 아래 내용을 가리므로 절대 고정하지 않는다. */
+  #app.is-editor { height: auto; overflow: visible; }
+  #app.is-editor .app-main { display: block; }
+  .editor-shell { grid-template-columns: 1fr; grid-template-rows: auto; padding-inline: max(var(--s4), 3vw); }
+  .editor-stage, .editor-side, .editor-bottom { grid-column: 1; grid-row: auto; overflow: visible; min-height: 0; }
+  .editor-stage .preview { max-height: 34vh; }
+  .side-foot { margin-top: var(--s2); }
   .cue { flex-direction: column; align-items: stretch; }
   .cue-actions .btn { flex: 1; }
-  .steps .step span:not(.mi) { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -144,7 +144,11 @@ export function previewCanvas(className: string): HTMLCanvasElement {
 
 export function sizeCanvas(c: HTMLCanvasElement, logicalWidth = 1920, logicalHeight = 1080): CanvasRenderingContext2D {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const w = Math.max(320, c.clientWidth || 640);
+  // 캔버스 CSS 박스가 16:9가 아닐 수 있다(무대를 꽉 채우고 object-fit: contain으로 맞춤).
+  // 비트맵은 항상 16:9로 유지하되, 박스 안에 들어가는 최대 크기를 고른다.
+  const boxW = Math.max(320, c.clientWidth || 640);
+  const boxH = c.clientHeight || (boxW * logicalHeight) / logicalWidth;
+  const w = Math.min(boxW, (boxH * logicalWidth) / logicalHeight);
   const h = (w * logicalHeight) / logicalWidth;
   const want = { w: Math.round(w * dpr), h: Math.round(h * dpr) };
   if (c.width !== want.w || c.height !== want.h) {
