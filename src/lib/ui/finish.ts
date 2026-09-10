@@ -1,4 +1,4 @@
-import { audio } from '../audio.js';
+import { audio, resume } from '../audio.js';
 import { exportSupport, exportVideo } from '../exporter.js';
 import { ensureGlyphs, fonts, loadCustomFont, refreshCdnFonts, resolveFamily, textForProject } from '../fonts.js';
 import { firstCue } from '../frame.js';
@@ -36,7 +36,12 @@ export function finishScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
     renderFrame(ctx, project(), audio.paused ? previewTime : audio.currentTime, state.bgPrepared);
   };
 
-  root.append(el('div', { class: 'stage stage-sticky' }, [preview]));
+  // 미리보기는 왼쪽 무대에 고정하고, 설정은 오른쪽에서 따로 스크롤한다(VREW·캡컷 배치).
+  // 이전에는 미리보기가 sticky라 아래 패널들이 그 뒤로 스크롤되어 가려졌다.
+  const stagePane = el('div', { class: 'editor-stage' }, [el('div', { class: 'stage' }, [preview])]);
+  const sidePane = el('div', { class: 'editor-side' });
+  root.className = 'editor-shell editor-shell-finish';
+  root.append(stagePane, sidePane);
 
   // ── 무대 프리셋 ───────────────────────────────────────
   const presetGrid = el('div', { class: 'thumb-grid' });
@@ -168,7 +173,7 @@ export function finishScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
     toggles.append(el('label', { class: 'field' }, [el('span', { textContent: '가사 색상' }), sel]));
   }
 
-  root.append(
+  sidePane.append(
     panel('무대', presetGrid),
     panel('글자', el('div', { class: 'stack' }, [fontGrid, fontPick])),
     panel(
@@ -196,7 +201,46 @@ export function finishScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
     exportPanel(go),
   );
 
+  const playBtn = button({
+    kind: 'primary',
+    icon: 'play_arrow',
+    title: '재생 / 정지',
+    onClick: () => {
+      resume().then(() => {
+        if (audio.paused) audio.play().catch(() => undefined);
+        else audio.pause();
+        syncPlay();
+      });
+    },
+  });
+  const clockOut = el('output', { class: 'transport-clock' });
+  const syncPlay = () => {
+    const mi = playBtn.querySelector('.mi');
+    if (mi) mi.textContent = audio.paused ? 'play_arrow' : 'pause';
+    playBtn.title = audio.paused ? '재생' : '정지';
+    clockOut.textContent = `${clock(audio.currentTime, true)} / ${clock(project().media.duration)}`;
+  };
+  audio.addEventListener('play', syncPlay);
+  audio.addEventListener('pause', syncPlay);
+  stagePane.append(
+    el('div', { class: 'transport transport-slim' }, [
+      playBtn,
+      clockOut,
+      button({
+        kind: 'ghost',
+        icon: 'replay',
+        label: '처음부터',
+        onClick: () => {
+          audio.currentTime = 0;
+          redraw();
+        },
+      }),
+      button({ kind: 'ghost', icon: 'tune', label: '타이밍 고치기', onClick: () => go(2) }),
+    ]),
+  );
+
   queueMicrotask(() => {
+    syncPlay();
     // 저장된 글꼴이 실제로 없으면 쓸 수 있는 글꼴로 조용히 대체한다.
     const resolved = resolveFamily(project().style.fontFamily);
     if (resolved !== project().style.fontFamily) {
@@ -212,7 +256,10 @@ export function finishScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
     stopFinish();
     const loop = () => {
       if (!preview.isConnected) return;
-      if (!audio.paused) redraw();
+      if (!audio.paused) {
+        redraw();
+        syncPlay();
+      }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);

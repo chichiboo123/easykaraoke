@@ -106,6 +106,9 @@ function render() {
     if (!state.project)
         return void home();
     const body = state.step === 1 ? prepareScreen(render, go) : state.step === 2 ? studioScreen(render, go) : finishScreen(render, go);
+    // 편집 화면(2·3단계)은 페이지 스크롤 없이 화면을 꽉 채우는 편집기 셸을 쓴다.
+    // 준비 화면과 홈은 일반 문서처럼 스크롤한다.
+    app.classList.toggle('is-editor', state.step !== 1);
     chrome(body, { steps: true });
     // 스크린리더가 새 화면의 시작을 읽도록 제목으로 포커스를 옮긴다.
     const heading = body.querySelector('h1, h2');
@@ -126,6 +129,7 @@ async function confirmHome() {
 // ── 홈 ─────────────────────────────────────────────────
 async function home() {
     teardown();
+    app.classList.remove('is-editor');
     const recent = await loadProjects().catch(() => []);
     const canRecord = typeof MediaRecorder !== 'undefined';
     const hero = el('section', { class: 'hero' }, [

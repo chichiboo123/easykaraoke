@@ -123,7 +123,7 @@ test('반주와 가사를 넣고 타이밍 화면까지 간다', async () => {
 });
 
 test('멈춰 있을 때의 Space는 재생 시작이지 스탬프가 아니다', async () => {
-  await page.locator('.block-head h2').click();
+  await page.locator('.side-head h2').click();
   // 오디오 엘리먼트는 new Audio()로 만들어져 DOM에 없다.
   // 사용자에게 보이는 신호인 트랜스포트 시계가 흐르는지로 판정한다.
   const clockBefore = await page.locator('.transport-clock').innerText();
@@ -165,8 +165,53 @@ test('미리보기 캔버스가 실제로 가사를 그린다', async () => {
   assert.ok(colors > 30, `미리보기 캔버스가 거의 비어 있다 (색 ${colors}종)`);
 });
 
-test('불러오지 못한 CDN 글꼴은 비활성 처리되고, 남은 글꼴로 계속 만들 수 있다', async () => {
+test('편집 화면은 페이지가 스크롤되지 않는다 (미리보기가 아래 내용을 가리는 것 방지)', async () => {
+  const scrolls = await page.evaluate(() => {
+    window.scrollTo(0, 5000);
+    const y = window.scrollY;
+    window.scrollTo(0, 0);
+    return y;
+  });
+  assert.equal(scrolls, 0, '편집 화면에서 문서가 스크롤됐다 — 미리보기가 아래 내용을 가릴 수 있다');
+});
+
+test('내보내기 진행 상자는 시작 전에는 보이지 않는다', async () => {
   await page.getByRole('button', { name: /꾸미고 저장하기/ }).click();
+  await page.locator('.export-progress').waitFor({ state: 'attached' });
+  assert.equal(await page.locator('.export-progress').isVisible(), false, 'hidden 속성이 클래스 규칙에 지고 있다');
+});
+
+test('설정 패널을 끝까지 내려도 미리보기가 가리지 않는다', async () => {
+  const side = page.locator('.editor-side');
+  await side.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  await page.waitForTimeout(300);
+  const overlapping = await page.evaluate(() => {
+    const stage = document.querySelector('.editor-stage')?.getBoundingClientRect();
+    if (!stage) return -1;
+    return [...document.querySelectorAll('.editor-side .panel')].filter((n) => {
+      const r = n.getBoundingClientRect();
+      return r.left < stage.right && r.right > stage.left && r.top < stage.bottom && r.bottom > stage.top;
+    }).length;
+  });
+  assert.equal(overlapping, 0, '미리보기 영역과 설정 패널이 겹친다');
+});
+
+test('미리보기 캔버스가 16:9를 유지하고 무대 크기에 맞게 커진다', async () => {
+  const info = await page.locator('.editor-stage .preview').evaluate((c) => {
+    const stage = c.closest('.stage').getBoundingClientRect();
+    // object-fit: contain 기준으로 실제 그려지는 영역을 계산한다.
+    const scale = Math.min(stage.width / c.width, stage.height / c.height);
+    return { bmpW: c.width, bmpH: c.height, shownW: c.width * scale, shownH: c.height * scale, stageW: stage.width, stageH: stage.height };
+  });
+  // 비트맵이 16:9가 아니면 렌더러 좌표계와 어긋나 그림이 찌그러진다.
+  assert.ok(Math.abs(info.bmpW / info.bmpH - 16 / 9) < 0.02, `비트맵 비율이 16:9가 아니다 (${info.bmpW}×${info.bmpH})`);
+  // width/height를 auto로 두면 캔버스 고유 크기와 순환 참조가 생겨 작게 굳는다.
+  assert.ok(info.bmpW >= 640, `미리보기 비트맵이 너무 작다 (${info.bmpW}px) — 캔버스 크기 계산이 굳었을 수 있다`);
+  const fill = Math.max(info.shownW / info.stageW, info.shownH / info.stageH);
+  assert.ok(fill > 0.95, `미리보기가 무대를 못 채운다 (${(fill * 100).toFixed(0)}%)`);
+});
+
+test('불러오지 못한 CDN 글꼴은 비활성 처리되고, 남은 글꼴로 계속 만들 수 있다', async () => {
   await page.locator('.font-card').first().waitFor();
   await page.waitForTimeout(600);
   const total = await page.locator('.font-card').count();

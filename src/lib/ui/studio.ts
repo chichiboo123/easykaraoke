@@ -164,21 +164,23 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
     ]),
   ]);
 
+  // VREW·캡컷 배치: 왼쪽에 미리보기와 재생 조작, 오른쪽에 가사 블록 목록,
+  // 아래 전체 폭에 타임라인. 페이지가 스크롤되지 않으므로 무엇도 다른 것을 가리지 않는다.
+  root.className = 'editor-shell editor-shell-studio';
   root.append(
-    // 미리보기와 트랜스포트를 한 덩어리로 고정해, 아래로 스크롤해도 늘 보이게 한다.
-    el('div', { class: 'studio-top' }, [el('div', { class: 'stage' }, [preview]), transport]),
-    el('div', { class: 'timeline-wrap' }, [timeline]),
-    tuning,
-    cuePanel,
-    el('div', { class: 'block-head' }, [
-      el('h2', { textContent: '가사 블록' }),
-      el('span', { class: 'hint', textContent: '카드를 누르면 그 자리로 이동해요. 타임라인에서 블록 끝을 끌면 길이가 바뀝니다.' }),
+    el('div', { class: 'editor-stage' }, [el('div', { class: 'stage' }, [preview]), transport, cuePanel]),
+    el('div', { class: 'editor-side' }, [
+      el('div', { class: 'side-head' }, [
+        el('h2', { textContent: '가사 블록' }),
+        el('span', { class: 'hint', textContent: '카드를 누르면 그 자리로 이동해요.' }),
+      ]),
+      cards,
+      el('div', { class: 'side-foot' }, [
+        button({ kind: 'ghost', icon: 'arrow_back', label: '가사 고치기', onClick: () => go(1) }),
+        button({ kind: 'primary', icon: 'palette', label: '꾸미고 저장하기', onClick: () => go(3) }),
+      ]),
     ]),
-    cards,
-    el('div', { class: 'screen-foot' }, [
-      button({ kind: 'ghost', icon: 'arrow_back', label: '가사 고치기', onClick: () => go(1) }),
-      button({ kind: 'primary', icon: 'palette', label: '꾸미고 저장하기', onClick: () => go(3) }),
-    ]),
+    el('div', { class: 'editor-bottom' }, [tuning, el('div', { class: 'timeline-wrap' }, [timeline])]),
   );
 
   // ── 동작 ──────────────────────────────────────────────
