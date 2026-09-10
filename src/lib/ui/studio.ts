@@ -1,4 +1,5 @@
 import { audio, computePeaks, resume, setRate, setVolume } from '../audio.js';
+import { ensureGlyphs, textForProject } from '../fonts.js';
 import { blockAt, nextUntimed } from '../frame.js';
 import { distribute, retext, timedCount } from '../lyrics.js';
 import { renderFrame } from '../renderer.js';
@@ -320,6 +321,7 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
       }
       // 텍스트만 바꾸고 타이밍은 지킨다. V1은 이 조작이 그 줄의 타이밍을 지웠다.
       commit(`retext-${b.id}`, () => retext(b, v));
+      ensureGlyphs(project().style.fontFamily, v);
       toast('가사를 고쳤어요. 타이밍은 그대로예요.', 'success');
     };
 
@@ -440,6 +442,7 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
   queueMicrotask(() => {
     setVolume(p.timing.volume);
     setRate(p.timing.rate);
+    ensureGlyphs(p.style.fontFamily, textForProject(p));
     if (state.files.audio) computePeaks(state.files.audio).catch(() => undefined);
     refreshAll();
     syncPlayIcon();

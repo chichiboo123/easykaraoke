@@ -1,5 +1,6 @@
 import type { KaraokeProject } from '../types.js';
 import { audio, ensureGraph, resume, setMonitor, setRate } from './audio.js';
+import { ensureGlyphs, textForProject } from './fonts.js';
 import { renderFrame } from './renderer.js';
 
 export type ExportStatus = { percent: number; stage: string; eta: number };
@@ -45,6 +46,10 @@ export async function exportVideo(opts: ExportOptions): Promise<Blob> {
   const support = exportSupport();
   if (!support.supported) throw new Error('이 브라우저는 영상 녹화를 지원하지 않아요. 최신 Chrome 또는 Edge에서 열어 주세요.');
 
+  // 영상에 나올 모든 글자의 글꼴 조각을 먼저 받는다.
+  // document.fonts.ready만으로는 아직 요청되지 않은 unicode-range 조각이 오지 않아,
+  // 내보낸 영상만 조용히 폴백 글꼴로 나가는 사고가 난다.
+  await ensureGlyphs(project.style.fontFamily, textForProject(project));
   await document.fonts.ready;
   await resume();
 

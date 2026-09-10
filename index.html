@@ -8,9 +8,20 @@
     <title>여기 있어 노래방</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined">
-    <link rel="stylesheet" href="./styles.css?v=2.0.0">
+    <!-- 앱 자체 스타일만 렌더링을 막는다. -->
+    <link rel="stylesheet" href="./styles.css?v=2.1.0">
+
+    <!-- 아래 글꼴들은 비차단으로 불러온다.
+         <link rel="stylesheet">는 렌더링 차단 자원이라, 학교 방화벽처럼 CDN이 느린 곳에서는
+         글꼴 하나 때문에 앱 화면 전체가 뜨지 않는다. media=print로 받아 놓고 onload에서 적용한다.
+         구글은 한글을 unicode-range 조각으로 나눠 주므로 실제로 쓰는 글자만 내려온다.
+         못 불러오면 해당 글꼴 카드가 "못 불러옴"으로 비활성 처리된다. -->
+    <link rel="stylesheet" media="print" onload="this.media='all'"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <link rel="stylesheet" media="print" onload="this.media='all'"
+          href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined">
+    <link rel="stylesheet" media="print" onload="this.media='all'"
+          href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&family=Gowun+Dodum&family=Jua&family=Noto+Sans+KR:wght@400;700&display=swap">
   </head>
   <body>
     <div id="app">
@@ -64,6 +75,6 @@
         }
       }, 8000);
     </script>
-    <script type="module" src="./app.js?v=2.0.0"></script>
+    <script type="module" src="./app.js?v=2.1.0"></script>
   </body>
 </html>

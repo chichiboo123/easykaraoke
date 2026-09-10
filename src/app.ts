@@ -394,17 +394,15 @@ function onSaveStateNoop() {
   /* saveBadge가 구독을 건다. 여기서는 초기화만. */
 }
 
+// 홈 화면은 글꼴이 필요 없다. 먼저 띄우고 글꼴은 뒤에서 준비한다.
+// 이렇게 해야 CDN이 느린 학교 네트워크에서도 앱이 즉시 뜬다.
+home();
 loadBuiltins()
   .then((list) => {
-    const missing = list.filter((f) => f.url && !f.ready);
-    if (missing.length === list.filter((f) => f.url).length) {
-      console.warn('내장 글꼴 파일이 없어 기본 글꼴로 표시됩니다.');
-    }
-  })
-  .catch(() => undefined)
-  .finally(() => {
+    const unavailable = list.filter((f) => f.source !== 'system' && !f.ready);
+    if (unavailable.length) console.warn('불러오지 못한 글꼴:', unavailable.map((f) => f.label).join(', '));
     notify();
-    home();
-  });
+  })
+  .catch(() => undefined);
 
 export { clock };

@@ -88,14 +88,17 @@ npm run check:deploy
 
 ## 폰트
 
-기본 영상 글꼴인 **TJ 노래하는즐거움체 M**이 `public/fonts/TJJoyofsingingM.otf`에 포함되어 있습니다.
-제공받은 OTF 원본을 변환·subset·이름 변경 없이 그대로 두었습니다(라이선스 조건).
+| 글꼴 | 출처 |
+|---|---|
+| **TJ 노래하는즐거움체 M** (기본) | 저장소 포함 — `public/fonts/TJJoyofsingingM.otf`, 원본 그대로(변환·subset 없음) |
+| 주아체 · 도현체 · 검은고딕 · 고운돋움 · 노토 산스 | Google Fonts CDN (OFL-1.1) |
 
-나머지 후보 글꼴(Noto Sans KR, Jua, Do Hyeon, Gowun Dodum, Black Han Sans)은 아직 파일이 없습니다.
-앱은 불러오지 못한 글꼴을 `파일 없음` 배지와 함께 비활성 처리하므로, 고를 수 없는 글꼴이 고를 수 있는 것처럼 보이지 않습니다.
+구글 글꼴은 한글을 unicode-range 조각으로 나눠 주므로 실제로 쓰는 글자만 내려옵니다.
+CDN에 닿지 못하면 해당 카드가 `못 불러옴` 배지와 함께 비활성 처리되고, TJ 글꼴과 기본 글꼴로 계속 만들 수 있습니다.
+글꼴 스타일시트는 비차단으로 불러오므로 CDN이 느려도 앱은 즉시 뜹니다.
 
-**공개 배포 전 확인**: GitHub Pages 배포는 글꼴 파일의 재배포에 해당합니다. TJ미디어의 현재 재배포 조건을 반드시 확인하세요.
-자세한 내용은 [FONT_LICENSE_NOTES.md](FONT_LICENSE_NOTES.md)를 참고하세요.
+**공개 배포 전 확인**: GitHub Pages 배포는 저장소에 포함된 TJ 글꼴 파일의 재배포에 해당합니다.
+TJ미디어의 현재 재배포 조건을 반드시 확인하세요. 자세한 내용은 [FONT_LICENSE_NOTES.md](FONT_LICENSE_NOTES.md).
 
 ## 기술
 

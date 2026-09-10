@@ -15,15 +15,23 @@
 - **공개 배포, 재배포 또는 상업 서비스로 전환하기 전에 TJ미디어의 당시 재배포·이용 조건을 반드시 다시 확인해야 합니다.**
   GitHub Pages로 공개 배포하는 것 자체가 글꼴 파일의 재배포에 해당합니다.
 
-## Google Fonts 후보 — 아직 포함되지 않음
+## Google Fonts — CDN에서 불러옴 (저장소에 파일 없음)
 
-Noto Sans KR, Jua, Do Hyeon, Gowun Dodum, Black Han Sans는 아직 저장소에 파일이 없습니다.
-앱은 이 글꼴들을 불러오지 못하면 글꼴 카드를 `파일 없음` 배지와 함께 비활성 처리하므로,
-사용자가 고를 수 없는 글꼴을 고를 수 있는 것처럼 보여주지 않습니다.
+Jua, Do Hyeon, Black Han Sans, Gowun Dodum, Noto Sans KR 다섯 종은 **Google Fonts CDN에서 직접 불러옵니다.**
+`index.html`의 `fonts.googleapis.com/css2` 링크가 `@font-face`를 등록하고, 실제 글꼴 조각은 `fonts.gstatic.com`에서 옵니다.
 
-추가하려면 각 family의 OFL-1.1 원본만 self-host하고 `OFL.txt`도 함께 보존하십시오.
-Google Fonts의 CSS2 API는 한글 글꼴을 unicode-range로 잘게 나눠 제공하므로,
-전체 한글을 담으려면 조각 파일이 아니라 https://fonts.google.com/ 의 family 페이지에서 받은 완본을 사용해야 합니다.
+- 라이선스: 모두 SIL Open Font License 1.1. Google Fonts가 제공하는 원본을 그대로 링크하므로 재배포에 해당하지 않습니다.
+- 구글은 한글 글꼴을 **unicode-range 조각 수십 개**로 나눠 제공합니다. 실제로 화면에 쓰는 글자의 조각만 내려오므로 전체를 받는 것보다 훨씬 가볍습니다.
+- 그 대신 **Canvas에 그리기 전에 해당 글자의 조각을 미리 받아 둬야 합니다.** `fillText`는 조각 다운로드를 유발하지 않기 때문에,
+  이걸 빼먹으면 미리보기와 내보낸 영상만 조용히 폴백 글꼴로 나갑니다. `src/lib/fonts.ts`의 `ensureGlyphs()`가 이 역할을 하며,
+  가사 입력·글꼴 선택·화면 진입·**내보내기 직전**에 호출됩니다.
+- 글꼴 스타일시트는 `media="print"` + `onload`로 **비차단 로드**합니다. `<link rel="stylesheet">`는 렌더링 차단 자원이라,
+  그냥 두면 CDN이 느린 학교 네트워크에서 글꼴 하나 때문에 앱 화면 전체가 뜨지 않습니다.
+- CDN에 닿지 못하면 해당 글꼴 카드가 **`못 불러옴` 배지와 함께 비활성** 처리됩니다.
+  이때도 저장소에 포함된 TJ 글꼴과 시스템 기본 글꼴로 영상을 만들 수 있습니다.
+
+완전한 오프라인 사용이 필요하면 각 family의 OFL 원본을 `public/fonts/`에 넣고 `OFL.txt`를 함께 보존한 뒤,
+`src/lib/fonts.ts`에서 해당 항목의 `source`를 `'cdn'`에서 `'bundled'`로 바꾸고 `url`을 지정하십시오.
 
 ## 사용자가 직접 추가하는 글꼴
 

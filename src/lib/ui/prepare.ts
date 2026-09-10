@@ -1,5 +1,6 @@
 import { setSource } from '../audio.js';
 import { computePeaks } from '../audio.js';
+import { ensureGlyphs, textForProject } from '../fonts.js';
 import { mergeBlocks, parseLyrics, timedCount } from '../lyrics.js';
 import { commit, markFileDirty, project, state } from '../store.js';
 import { button, confirmDialog, dropzone, el, filePicker, icon, toast } from './shell.js';
@@ -103,6 +104,7 @@ export function prepareScreen(rerender: () => void, go: (step: 1 | 2 | 3) => voi
         target.blocks = merged.blocks;
         target.timing.cursor = 0;
       });
+      ensureGlyphs(project().style.fontFamily, textForProject(project()));
       rerender();
       toast(merged.kept ? `${merged.blocks.length}줄 준비 완료 · ${merged.kept}줄은 타이밍을 지켰어요.` : `${merged.blocks.length}줄 준비 완료!`, 'success');
     },
