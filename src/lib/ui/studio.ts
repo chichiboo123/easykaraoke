@@ -1,11 +1,12 @@
 import { audio, computePeaks, resume, setRate, setVolume } from '../audio.js';
 import { ensureGlyphs, textForProject } from '../fonts.js';
 import { blockAt, nextUntimed } from '../frame.js';
-import { distribute, retext, timedCount } from '../lyrics.js';
+import { distribute, isLyric, lyricCount, makeInterlude, retext, segmentKorean, timedCount } from '../lyrics.js';
 import { renderFrame } from '../renderer.js';
 import { canRedo, canUndo, commit, project, redo, state, touch, undo } from '../store.js';
+import { uid } from '../../types.js';
 import { TIMELINE_H, draw as drawTimeline, hitTest, windowFor, type ViewWindow } from '../timeline.js';
-import { button, clock, el, icon, previewCanvas, sizeCanvas, toast } from './shell.js';
+import { button, clock, confirmDialog, el, icon, previewCanvas, sizeCanvas, toast } from './shell.js';
 
 const MIN_BLOCK = 0.2;
 
@@ -35,10 +36,10 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
   const cueText = el('b', { class: 'cue-text' });
   const cueQueue = el('div', { class: 'cue-queue' });
   const clockOut = el('output', { class: 'transport-clock' });
-  const playBtn = button({ kind: 'primary', icon: 'play_arrow', title: '재생 / 정지 (K)', onClick: togglePlay });
+  const playBtn = button({ kind: 'primary', icon: 'play_arrow', title: '재생 / 정지 (K)', fallback: '▶', onClick: togglePlay });
   const stampBtn = button({ kind: 'primary', icon: 'ads_click', label: 'Space · 여기서 시작', onClick: stamp });
-  const undoBtn = button({ kind: 'ghost', icon: 'undo', title: '되돌리기 (Ctrl+Z)', onClick: () => (undo() ? refreshAll() : toast('되돌릴 것이 없어요.')) });
-  const redoBtn = button({ kind: 'ghost', icon: 'redo', title: '다시 실행 (Ctrl+Shift+Z)', onClick: () => (redo() ? refreshAll() : toast('다시 실행할 것이 없어요.')) });
+  const undoBtn = button({ kind: 'ghost', icon: 'undo', title: '되돌리기 (Ctrl+Z)', fallback: '↶', onClick: () => (undo() ? refreshAll() : toast('되돌릴 것이 없어요.')) });
+  const redoBtn = button({ kind: 'ghost', icon: 'redo', title: '다시 실행 (Ctrl+Shift+Z)', fallback: '↷', onClick: () => (redo() ? refreshAll() : toast('다시 실행할 것이 없어요.')) });
   const cards = el('div', { class: 'block-list' });
   const progressPill = el('span', { class: 'pill' });
 
@@ -173,6 +174,10 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
       el('div', { class: 'side-head' }, [
         el('h2', { textContent: '가사 블록' }),
         el('span', { class: 'hint', textContent: '카드를 누르면 그 자리로 이동해요.' }),
+        el('div', { class: 'side-tools' }, [
+          button({ kind: 'secondary', icon: 'playlist_add', label: '줄 추가', onClick: () => addBlock() }),
+          button({ kind: 'secondary', icon: 'more_horiz', label: '간주 넣기', title: '지금 재생 위치의 빈 구간을 간주중으로 채워요', onClick: () => addInterlude() }),
+        ]),
       ]),
       cards,
       el('div', { class: 'side-foot' }, [
@@ -225,6 +230,7 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
       toast('노래가 시작됐어요. 줄이 나올 때마다 Space를 눌러 주세요.');
       return;
     }
+    skipInterludes();
     const i = cur.timing.cursor;
     if (i >= cur.blocks.length) {
       toast('모든 줄을 다 찍었어요!', 'success');
@@ -265,23 +271,112 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
     renderCards();
   }
 
+  /** 커서가 간주 블록에 걸리면 다음 가사 줄로 넘긴다. */
+  function skipInterludes() {
+    const cur = project();
+    while (cur.timing.cursor < cur.blocks.length && !isLyric(cur.blocks[cur.timing.cursor])) cur.timing.cursor++;
+  }
+
   function renderCue() {
     const cur = project();
+    skipInterludes();
     const i = cur.timing.cursor;
     const block = cur.blocks[i];
     cueText.textContent = block ? block.text : '모두 완료!';
     cueText.classList.toggle('is-done', !block);
     cueQueue.replaceChildren(
-      ...cur.blocks.slice(i + 1, i + 4).map((b) => el('span', { textContent: b.text })),
+      ...cur.blocks.slice(i + 1).filter(isLyric).slice(0, 3).map((b) => el('span', { textContent: b.text })),
     );
     stampBtn.disabled = !block;
     const stampLabel = stampBtn.querySelector('span:not(.mi)');
     if (stampLabel) stampLabel.textContent = audio.paused ? 'Space · 노래 시작' : 'Space · 여기서 시작';
     const timed = timedCount(cur.blocks);
-    progressPill.replaceChildren(el('b', { textContent: `${timed}` }), el('span', { textContent: ` / ${cur.blocks.length}줄` }));
-    progressPill.classList.toggle('is-done', timed === cur.blocks.length && cur.blocks.length > 0);
+    const total = lyricCount(cur.blocks);
+    progressPill.replaceChildren(el('b', { textContent: `${timed}` }), el('span', { textContent: ` / ${total}줄` }));
+    progressPill.classList.toggle('is-done', timed === total && total > 0);
     undoBtn.disabled = !canUndo();
     redoBtn.disabled = !canRedo();
+  }
+
+  /** 새 가사 줄을 고른 카드 뒤에 넣는다. 타이밍은 비어 있는 채로 시작한다. */
+  function addBlock(at?: number) {
+    const cur = project();
+    const index = at ?? (state.selected >= 0 ? state.selected + 1 : cur.blocks.length);
+    commit('add-block', () => {
+      cur.blocks.splice(index, 0, {
+        id: uid(),
+        text: '새 가사',
+        roleId: cur.blocks[Math.max(0, index - 1)]?.roleId || cur.roles[0].id,
+        kind: 'lyric',
+        start: 0,
+        end: 0,
+        segments: segmentKorean('새 가사'),
+      });
+      if (cur.timing.cursor > index) cur.timing.cursor++;
+    });
+    state.selected = index;
+    refreshAll();
+    // 바로 고쳐 쓸 수 있게 새 카드의 입력란에 커서를 둔다.
+    queueMicrotask(() => {
+      const input = cards.children[index]?.querySelector<HTMLInputElement>('.block-text');
+      input?.focus();
+      input?.select();
+    });
+  }
+
+  /**
+   * 지금 재생 위치가 놓인 빈 구간을 간주 블록으로 채운다.
+   * 노래방에서 가사가 없는 구간에 "간주중"이 뜨는 그 표시다.
+   */
+  function addInterlude() {
+    const cur = project();
+    const t = audio.currentTime + cur.timing.offset;
+    const timed = cur.blocks.filter((b) => b.end > b.start).sort((a, b) => a.start - b.start);
+    if (timed.some((b) => t >= b.start && t < b.end)) {
+      toast('여기는 이미 가사가 있는 구간이에요. 빈 구간으로 옮겨서 눌러 주세요.');
+      return;
+    }
+    const before = timed.filter((b) => b.end <= t).pop();
+    const after = timed.find((b) => b.start > t);
+    const start = before ? before.end : 0;
+    const end = after ? after.start : Math.min(cur.media.duration, t + 8);
+    if (end - start < 0.4) {
+      toast('간주를 넣기에는 구간이 너무 짧아요.');
+      return;
+    }
+    const block = makeInterlude(start, end, cur.roles[0].id);
+    // 시간 순서에 맞는 자리에 끼워 넣는다.
+    const index = before ? cur.blocks.indexOf(before) + 1 : 0;
+    commit('add-interlude', () => {
+      cur.blocks.splice(index, 0, block);
+      if (cur.timing.cursor > index) cur.timing.cursor++;
+    });
+    state.selected = index;
+    refreshAll();
+    toast(`${clock(start)} – ${clock(end)}에 간주를 넣었어요.`, 'success');
+  }
+
+  function moveBlock(index: number, delta: number) {
+    const cur = project();
+    const to = index + delta;
+    if (to < 0 || to >= cur.blocks.length) return;
+    commit('move-block', () => {
+      const [b] = cur.blocks.splice(index, 1);
+      cur.blocks.splice(to, 0, b);
+    });
+    state.selected = to;
+    refreshAll();
+  }
+
+  function removeBlock(index: number) {
+    const cur = project();
+    commit('remove-block', () => {
+      cur.blocks.splice(index, 1);
+      if (cur.timing.cursor > index) cur.timing.cursor--;
+      cur.timing.cursor = Math.min(cur.timing.cursor, cur.blocks.length);
+    });
+    state.selected = Math.min(index, cur.blocks.length - 1);
+    refreshAll();
   }
 
   function renderCards() {
@@ -313,6 +408,7 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
       if (timed) seek(b.start - 0.3);
     };
 
+    if (b.kind === 'interlude') card.classList.add('is-interlude');
     const text = el('input', { class: 'block-text', type: 'text', value: b.text });
     text.setAttribute('aria-label', `${i + 1}번 가사`);
     text.onchange = () => {
@@ -328,10 +424,24 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
     };
 
     const actions = el('div', { class: 'block-actions' }, [
+      button({ kind: 'ghost', icon: 'keyboard_arrow_up', title: '위로 옮기기', fallback: '↑', disabled: i === 0, onClick: () => moveBlock(i, -1) }),
+      button({ kind: 'ghost', icon: 'keyboard_arrow_down', title: '아래로 옮기기', fallback: '↓', disabled: i === project().blocks.length - 1, onClick: () => moveBlock(i, 1) }),
+      button({ kind: 'ghost', icon: 'add', title: '아래에 줄 추가', fallback: '＋', onClick: () => addBlock(i + 1) }),
+      button({
+        kind: 'ghost',
+        icon: 'delete_outline',
+        title: '이 줄 지우기',
+        fallback: '✕',
+        onClick: async () => {
+          const ok = await confirmDialog({ title: '이 줄을 지울까요?', body: `"${b.text}" 줄과 그 타이밍이 사라져요.`, confirm: '지우기', danger: true });
+          if (ok) removeBlock(i);
+        },
+      }),
       button({
         kind: 'ghost',
         icon: 'restart_alt',
         title: '이 줄부터 다시 찍기',
+        fallback: '↻',
         onClick: () => {
           commit(`recut-${b.id}`, () => {
             const cur = project();

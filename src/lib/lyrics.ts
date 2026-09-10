@@ -64,7 +64,7 @@ export function parseLyrics(input: string, roles: Role[], musicalMode = false): 
 export function mergeBlocks(previous: LyricBlock[], incoming: LyricBlock[]): { blocks: LyricBlock[]; kept: number; lost: number } {
   const pool = new Map<string, LyricBlock[]>();
   for (const b of previous) {
-    if (b.end <= b.start) continue;
+    if (b.end <= b.start || !isLyric(b)) continue;
     const list = pool.get(b.text);
     if (list) list.push(b);
     else pool.set(b.text, [b]);
@@ -76,7 +76,14 @@ export function mergeBlocks(previous: LyricBlock[], incoming: LyricBlock[]): { b
     kept++;
     return { ...match, roleId: b.roleId };
   });
-  const timedBefore = previous.filter((b) => b.end > b.start).length;
+  const timedBefore = previous.filter((b) => isLyric(b) && b.end > b.start).length;
+
+  // 간주 블록은 가사 목록에 없으므로 그냥 두면 사라진다. 시간 순서에 맞게 되돌려 놓는다.
+  const interludes = previous.filter((b) => !isLyric(b));
+  for (const gap of interludes) {
+    const at = blocks.findIndex((b) => b.end > b.start && b.start >= gap.end);
+    blocks.splice(at < 0 ? blocks.length : at, 0, gap);
+  }
   return { blocks, kept, lost: Math.max(0, timedBefore - kept) };
 }
 
@@ -120,7 +127,15 @@ export function retext(block: LyricBlock, text: string): void {
   distribute(block);
 }
 
-export const timedCount = (blocks: LyricBlock[]) => blocks.filter((b) => b.end > b.start).length;
+/** 간주는 사용자가 찍는 대상이 아니다. 진행률과 커서 계산에서 제외한다. */
+export const isLyric = (b: LyricBlock) => b.kind !== 'interlude';
+export const lyricCount = (blocks: LyricBlock[]) => blocks.filter(isLyric).length;
+export const timedCount = (blocks: LyricBlock[]) => blocks.filter((b) => isLyric(b) && b.end > b.start).length;
+
+/** 간주 블록. 가사가 없는 구간을 "간주중"으로 채운다. */
+export function makeInterlude(start: number, end: number, roleId: string): LyricBlock {
+  return { id: uid(), text: '간주중', roleId, kind: 'interlude', start, end, segments: [] };
+}
 
 export function flatten(blocks: LyricBlock[]) {
   return blocks.flatMap((block, bi) => block.segments.map((segment, si) => ({ block, segment, bi, si })));

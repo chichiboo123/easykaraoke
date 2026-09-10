@@ -165,6 +165,46 @@ test('미리보기 캔버스가 실제로 가사를 그린다', async () => {
   assert.ok(colors > 30, `미리보기 캔버스가 거의 비어 있다 (색 ${colors}종)`);
 });
 
+test('가사 블록을 추가·이동·삭제할 수 있다', async () => {
+  const cards = page.locator('.block-card');
+  const before = await cards.count();
+
+  await page.locator('.side-tools .btn', { hasText: '줄 추가' }).click();
+  await page.waitForTimeout(200);
+  assert.equal(await cards.count(), before + 1, '줄이 추가되지 않았다');
+
+  // 순서 바꾸기 — 1번과 2번 가사가 서로 자리를 바꿔야 한다
+  const firstText = await cards.nth(0).locator('.block-text').inputValue();
+  const secondText = await cards.nth(1).locator('.block-text').inputValue();
+  await cards.nth(1).locator('.btn[aria-label="위로 옮기기"]').click();
+  await page.waitForTimeout(200);
+  assert.equal(await cards.nth(0).locator('.block-text').inputValue(), secondText, '위로 옮기기가 안 먹었다');
+  assert.equal(await cards.nth(1).locator('.block-text').inputValue(), firstText);
+
+  // 삭제 — 확인 대화상자를 거친다
+  const target = await cards.nth(0).locator('.block-text').inputValue();
+  await cards.nth(0).locator('.btn[aria-label="이 줄 지우기"]').click();
+  await page.locator('.dialog .btn-danger').click();
+  await page.waitForTimeout(250);
+  assert.equal(await cards.count(), before, '삭제되지 않았다');
+  assert.notEqual(await cards.nth(0).locator('.block-text').inputValue(), target);
+});
+
+test('빈 구간에 간주를 넣으면 블록 목록에 간주 카드가 생긴다', async () => {
+  // 마지막 가사 뒤의 확실한 빈 구간으로 재생 위치를 옮긴다.
+  await page.evaluate(async () => {
+    const { audio } = await import('./lib/audio.js');
+    audio.pause();
+    audio.currentTime = 7.5;
+  });
+  await page.waitForTimeout(200);
+  await page.locator('.side-tools .btn', { hasText: '간주 넣기' }).click();
+  await page.waitForTimeout(300);
+  const interludes = await page.locator('.block-card.is-interlude').count();
+  assert.ok(interludes >= 1, '간주 블록이 만들어지지 않았다');
+  assert.equal(await page.locator('.block-card.is-interlude .block-text').first().inputValue(), '간주중');
+});
+
 test('편집 화면은 페이지가 스크롤되지 않는다 (미리보기가 아래 내용을 가리는 것 방지)', async () => {
   const scrolls = await page.evaluate(() => {
     window.scrollTo(0, 5000);

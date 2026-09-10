@@ -18,13 +18,17 @@ export function blockAt(p: KaraokeProject, time: number): { block?: LyricBlock; 
   const timed = blocks.filter((b) => b.end > b.start);
   if (!timed.length) return { block: blocks[0], next: blocks[1], index: 0 };
 
-  let index = blocks.findIndex((b) => b.end > b.start && time >= b.start && time < b.end);
-  if (index < 0) {
-    // 구간 사이(간주)라면 다음에 올 블록을 미리 보여준다.
-    const upcoming = blocks.findIndex((b) => b.end > b.start && b.start > time);
-    index = upcoming >= 0 ? upcoming : blocks.lastIndexOf(timed[timed.length - 1]);
-  }
-  return { block: blocks[index], next: blocks[index + 1], index };
+  const index = blocks.findIndex((b) => b.end > b.start && time >= b.start && time < b.end);
+  // 어떤 블록에도 속하지 않는 시각이면 아무 가사도 보여주지 않는다.
+  // 예전에는 다음에 올 블록을 미리 띄워, 간주 내내 이전 가사가 남아 있는 것처럼 보였다.
+  if (index < 0) return { index: -1, next: blocks.find((b) => b.end > b.start && b.start > time) };
+  return { block: blocks[index], next: nextLyric(blocks, index), index };
+}
+
+/** 다음에 보여줄 가사. 간주 블록은 건너뛴다. */
+function nextLyric(blocks: LyricBlock[], from: number): LyricBlock | undefined {
+  for (let i = from + 1; i < blocks.length; i++) if (blocks[i].kind !== 'interlude') return blocks[i];
+  return undefined;
 }
 
 /** 첫 가사가 시작되는 시각. 인트로 카드와 카운트다운의 기준. */
@@ -35,6 +39,9 @@ export function firstCue(p: KaraokeProject): number {
 
 /** 아직 타이밍이 없는 첫 블록의 위치. "이어서 찍기"의 기준. */
 export function nextUntimed(p: KaraokeProject, from = 0): number {
-  for (let i = Math.max(0, from); i < p.blocks.length; i++) if (p.blocks[i].end <= p.blocks[i].start) return i;
+  for (let i = Math.max(0, from); i < p.blocks.length; i++) {
+    const b = p.blocks[i];
+    if (b.kind !== 'interlude' && b.end <= b.start) return i;
+  }
   return -1;
 }

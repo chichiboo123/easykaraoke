@@ -1,7 +1,7 @@
 import { migrate, type KaraokeProject } from './types.js';
 import { audio, computePeaks, setRate, setSource, setVolume } from './lib/audio.js';
 import { loadBuiltins, loadCustomFont, resolveFamily } from './lib/fonts.js';
-import { timedCount } from './lib/lyrics.js';
+import { lyricCount, timedCount } from './lib/lyrics.js';
 import { adopt, create, hydrateFiles, onSaveState, project, resetSession, save, saveState, setBackground, state, undo, redo, notify } from './lib/store.js';
 import { loadProjects, removeProject } from './lib/storage.js';
 import { acceptAudio, prepareScreen } from './lib/ui/prepare.js';
@@ -188,7 +188,7 @@ async function home(): Promise<void> {
       const card = el('article', { class: 'recent-card' });
       const openBtn = el('button', { class: 'recent-open', type: 'button' }, [
         el('b', { textContent: p.meta.title || '제목 없음' }),
-        el('small', { textContent: `${p.blocks.length}줄 · 타이밍 ${timedCount(p.blocks)}줄 · ${new Date(p.updatedAt).toLocaleDateString('ko-KR')}` }),
+        el('small', { textContent: `${lyricCount(p.blocks)}줄 · 타이밍 ${timedCount(p.blocks)}줄 · ${new Date(p.updatedAt).toLocaleDateString('ko-KR')}` }),
       ]);
       openBtn.onclick = () => openRecent(p);
       card.append(
@@ -236,32 +236,59 @@ function step(no: string, ic: string, title: string, detail: string): HTMLElemen
 }
 
 function createDialog(): void {
-  const dlg = el('dialog', { class: 'dialog' });
+  const dlg = el('dialog', { class: 'dialog dialog-create' });
   const form = el('form', { class: 'stack' });
-  const title = el('input', { class: 'input', name: 'title', required: true, placeholder: '예) 여기 있어' });
-  title.setAttribute('aria-label', '곡 제목');
-  const musical = el('input', { class: 'input', name: 'musical', placeholder: '예) 우리들의 봄' });
-  musical.setAttribute('aria-label', '작품명');
+
+  // 입력한 항목만 결과 영상 첫 화면에 나온다. 그래서 전부 선택이고 제목만 필수다.
+  const fields: [keyof KaraokeProject['meta'], string, string, boolean][] = [
+    ['title', '곡 제목', '예) 아리랑', true],
+    ['artist', '노래 (가수명)', '예) SG워너비', false],
+    ['lyricist', '작사', '예) 안영민', false],
+    ['composer', '작곡', '예) 조영수', false],
+    ['musical', '작품명', '예) 우리들의 봄', false],
+  ];
+
+  const inputs = new Map<string, HTMLInputElement>();
+  for (const [key, label, placeholder, required] of fields) {
+    const input = el('input', { class: 'input', name: key, placeholder, required });
+    input.setAttribute('aria-label', label);
+    inputs.set(key, input);
+    form.append(
+      el('label', { class: 'field' }, [
+        el('span', {}, [el('span', { textContent: label }), required ? el('b', { class: 'req', textContent: ' *' }) : el('small', { class: 'opt', textContent: ' 선택' })]),
+        input,
+      ]),
+    );
+  }
+
   form.append(
-    el('label', { class: 'field' }, [el('span', { textContent: '곡 제목 *' }), title]),
-    el('label', { class: 'field' }, [el('span', { textContent: '작품명 (선택)' }), musical]),
+    el('p', { class: 'hint', textContent: '적어 둔 항목은 영상 첫 화면에 노래방처럼 표시돼요. 나중에 바꿔도 됩니다.' }),
     el('div', { class: 'dialog-actions' }, [
       button({ kind: 'ghost', label: '취소', onClick: () => (dlg.close(), dlg.remove()) }),
       el('button', { class: 'btn btn-primary', type: 'submit', textContent: '시작하기' }),
     ]),
   );
+
   form.onsubmit = (e) => {
     e.preventDefault();
-    if (!title.value.trim()) return;
+    const title = inputs.get('title')!.value.trim();
+    if (!title) return;
     dlg.close();
     dlg.remove();
-    create(title.value.trim(), { musical: musical.value.trim() });
+    const meta: Partial<KaraokeProject['meta']> = {};
+    for (const [key] of fields) {
+      if (key === 'title') continue;
+      const v = inputs.get(key)!.value.trim();
+      if (v) meta[key] = v;
+    }
+    create(title, meta);
     go(1);
   };
+
   dlg.append(el('h2', { textContent: '새 노래 만들기' }), form);
   document.body.append(dlg);
   dlg.showModal();
-  title.focus();
+  inputs.get('title')!.focus();
 }
 
 async function openRecent(meta: KaraokeProject): Promise<void> {
