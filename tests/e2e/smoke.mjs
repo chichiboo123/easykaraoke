@@ -211,7 +211,26 @@ test('미리보기 캔버스가 16:9를 유지하고 무대 크기에 맞게 커
   assert.ok(fill > 0.95, `미리보기가 무대를 못 채운다 (${(fill * 100).toFixed(0)}%)`);
 });
 
+test('꾸미기 설정이 탭으로 나뉘어 한 번에 하나만 보인다', async () => {
+  const tabs = page.locator('.tab-bar .tab');
+  assert.equal(await tabs.count(), 4, '무대 · 글자 · 배경 · 저장 네 개의 탭이 있어야 한다');
+  const visibleBodies = await page.locator('.tab-body > *:not([hidden])').count();
+  assert.equal(visibleBodies, 1, `한 번에 하나만 보여야 하는데 ${visibleBodies}개가 보인다`);
+});
+
+test('무대 씬을 고르면 미리보기가 그 씬으로 바뀐다', async () => {
+  const thumbs = page.locator('.thumb');
+  assert.ok((await thumbs.count()) >= 12, '무대 씬이 12종 이상이어야 한다');
+  const before = await page.locator('.editor-stage .preview').evaluate((c) => c.toDataURL().length);
+  await thumbs.filter({ hasText: '네온 시티' }).click();
+  await page.waitForTimeout(500);
+  const after = await page.locator('.editor-stage .preview').evaluate((c) => c.toDataURL().length);
+  assert.notEqual(after, before, '씬을 바꿔도 미리보기가 그대로다');
+  assert.equal(await thumbs.filter({ hasText: '네온 시티' }).getAttribute('class'), 'thumb is-chosen');
+});
+
 test('불러오지 못한 CDN 글꼴은 비활성 처리되고, 남은 글꼴로 계속 만들 수 있다', async () => {
+  await page.locator('.tab-bar .tab', { hasText: '글자' }).click();
   await page.locator('.font-card').first().waitFor();
   await page.waitForTimeout(600);
   const total = await page.locator('.font-card').count();
@@ -236,7 +255,9 @@ test('저장소에 포함된 TJ 글꼴은 CDN과 무관하게 캔버스에 적�
   assert.ok(applied, 'TJ 글꼴이 폴백으로 대체되고 있다');
 });
 
-test('무대 프리셋 썸네일을 실제 렌더러로 그린다 (CSS 하드코딩 색 불일치 방지)', async () => {
+test('무대 썸네일을 실제 렌더러로 그린다 (CSS 하드코딩 색 불일치 방지)', async () => {
+  await page.locator('.tab-bar .tab', { hasText: '무대' }).click();
+  await page.waitForTimeout(300);
   const colors = await page.locator('.thumb-canvas').first().evaluate((c) => {
     const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
     const seen = new Set();

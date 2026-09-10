@@ -79,7 +79,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-#app { min-height: 100%; display: flex; flex-direction: column; }
+#app { min-height: 100%; display: flex; flex-direction: column; position: relative; }
 
 h1, h2, h3 { margin: 0; line-height: 1.35; text-wrap: balance; }
 h1 { font-size: var(--t-h1); font-weight: 800; letter-spacing: -.02em; }
@@ -88,6 +88,10 @@ h3 { font-size: var(--t-h3); font-weight: 700; }
 p { margin: 0; }
 :focus-visible { outline: 3px solid var(--fill); outline-offset: 2px; border-radius: var(--r-sm); }
 
+/* 화면에서만 숨기고 키보드·스크린리더에는 남긴다.
+   position:absolute이므로 반드시 위치가 지정된 조상 안에 있어야 한다.
+   그렇지 않으면 초기 컨테이닝 블록 기준으로 배치돼 상위의 overflow:hidden을 빠져나가고,
+   문서 높이를 늘려 원치 않는 페이지 스크롤을 만든다. */
 .visually-hidden {
   position: absolute; width: 1px; height: 1px; margin: -1px;
   padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
@@ -130,7 +134,7 @@ html.no-icons .btn-iconly::after { content: attr(aria-label); font-size: var(--t
 :root[data-theme="dark"] .btn-danger { color: #2A0D0B; }
 .btn:disabled { opacity: .42; cursor: not-allowed; }
 .btn.is-on { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); }
-.file-picker { display: inline-flex; }
+.file-picker { display: inline-flex; position: relative; }
 
 /* ── 앱 바 ────────────────────────────────────────────── */
 .app-bar {
@@ -352,13 +356,22 @@ html.no-icons .btn-iconly::after { content: attr(aria-label); font-size: var(--t
 .block-role { padding: 4px var(--s2); border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font: inherit; font-size: var(--t-caption); max-width: 110px; }
 
 /* ── 꾸미기 화면 ──────────────────────────────────────── */
-.thumb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--s3); }
-.thumb { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s2); background: var(--surface); border: 2px solid var(--line); border-radius: var(--r-md); cursor: pointer; color: inherit; font: inherit; text-align: left; }
+/* 탭 — 설정을 한 화면에 다 쌓지 않고 하나씩 보여준다. */
+.tab-bar { display: flex; gap: 2px; padding: 3px; background: var(--surface-2); border-radius: var(--r-md); position: sticky; top: 0; z-index: 2; }
+.tab-bar .tab { flex: 1; min-height: 36px; padding: 6px 8px; font-size: var(--t-small); border-radius: var(--r-sm); }
+.tab-bar .tab.is-active { background: var(--surface); color: var(--accent-ink); font-weight: 700; box-shadow: var(--shadow); }
+.tab-body { display: flex; flex-direction: column; }
+.group-label { font-size: var(--t-caption); font-weight: 700; letter-spacing: .06em; color: var(--subtle); margin-top: var(--s2); }
+.group-label:first-child { margin-top: 0; }
+
+.thumb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--s2); }
+.thumb { display: flex; flex-direction: column; gap: 6px; padding: 5px; background: var(--surface); border: 2px solid var(--line); border-radius: var(--r-md); cursor: pointer; color: inherit; font: inherit; text-align: left; transition: border-color .15s, transform .15s; }
+.thumb:hover { border-color: var(--line-strong); transform: translateY(-1px); }
 .thumb-canvas { width: 100%; aspect-ratio: 16 / 9; border-radius: var(--r-sm); display: block; background: #0B0A14; }
-.thumb b { font-size: var(--t-small); padding-inline: var(--s1); }
+.thumb b { font-size: var(--t-caption); padding-inline: var(--s1); padding-bottom: 2px; }
 .thumb.is-chosen { border-color: var(--accent); }
 
-.font-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--s3); }
+.font-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s2); }
 .font-card { position: relative; display: flex; flex-direction: column; gap: var(--s1); padding: var(--s3) var(--s4); background: var(--surface); border: 2px solid var(--line); border-radius: var(--r-md); cursor: pointer; color: inherit; text-align: left; }
 .font-card b { font-size: var(--t-small); font-weight: 600; color: var(--muted); font-family: 'Pretendard GOV', 'Pretendard', sans-serif; }
 .font-card span { font-size: 21px; }

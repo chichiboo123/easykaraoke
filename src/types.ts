@@ -21,7 +21,10 @@ export type LyricBlock = {
 
 export type Role = { id: string; name: string; color: string };
 
-export type Preset = 'classic' | 'stage' | 'dream' | 'classroom' | 'retro' | 'minimal';
+export type Preset =
+  | 'classic' | 'minimal' | 'classroom'
+  | 'aurora' | 'bokeh' | 'starfield' | 'dream'
+  | 'stage' | 'spotlight' | 'neon' | 'retro' | 'confetti';
 
 export type ProjectStyle = {
   preset: Preset;
