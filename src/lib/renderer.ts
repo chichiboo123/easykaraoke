@@ -1,31 +1,19 @@
-import type { KaraokeProject, LyricBlock, Preset } from '../types.js';
+import type { KaraokeProject, LyricBlock } from '../types.js';
 import { blockAt, firstCue, segmentProgress } from './frame.js';
+import { drawScrim, finishScene, sceneOf } from './scenes.js';
 
 const W = 1920;
 const H = 1080;
-
-type Palette = { from: string; to: string; point: string; lyricY: number; size: number };
-
-const PALETTES: Record<Preset, Palette> = {
-  classic: { from: '#07152f', to: '#172a52', point: '#ffd43b', lyricY: 540, size: 104 },
-  stage: { from: '#16122c', to: '#522278', point: '#e9b8ff', lyricY: 560, size: 100 },
-  dream: { from: '#172554', to: '#6d28d9', point: '#93c5fd', lyricY: 520, size: 96 },
-  classroom: { from: '#0891b2', to: '#34d399', point: '#fff7b0', lyricY: 560, size: 108 },
-  retro: { from: '#3b176f', to: '#ef476f', point: '#ffd166', lyricY: 540, size: 100 },
-  minimal: { from: '#111827', to: '#1f2937', point: '#fbbf24', lyricY: 600, size: 92 },
-};
-
-export const presetOf = (p: Preset): Palette => PALETTES[p];
 
 function font(size: number, family: string) {
   return `700 ${size}px "${family}", "Noto Sans KR", system-ui, sans-serif`;
 }
 
 /** 외곽선 + 채움. 밝은 배경 이미지 위에서도 읽히게 한다. */
-function outlined(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, width: number, fill: string) {
+function outlined(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, width: number, fill: string, stroke = 'rgba(0,0,0,.78)') {
   ctx.lineJoin = 'round';
   ctx.lineWidth = width;
-  ctx.strokeStyle = 'rgba(0,0,0,.78)';
+  ctx.strokeStyle = stroke;
   ctx.strokeText(text, x, y);
   ctx.fillStyle = fill;
   ctx.fillText(text, x, y);
@@ -127,17 +115,12 @@ function cover(ctx: CanvasRenderingContext2D, img: CanvasImageSource) {
 
 export function renderFrame(ctx: CanvasRenderingContext2D, p: KaraokeProject, rawTime: number, bg?: CanvasImageSource): void {
   const time = rawTime + p.timing.offset;
-  const pal = PALETTES[p.style.preset] || PALETTES.classic;
+  const pal = sceneOf(p.style.preset);
   const family = p.style.fontFamily;
   ctx.save();
   ctx.clearRect(0, 0, W, H);
 
-  const g = ctx.createLinearGradient(0, 0, W, H);
-  g.addColorStop(0, pal.from);
-  g.addColorStop(1, pal.to);
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-
+  // 배경 이미지를 넣었으면 그것이 무대를 대신한다. 아니면 절차적 씬을 그린다.
   if (bg) {
     ctx.save();
     // blur는 오프스크린에서 미리 처리된 것을 받는다(exporter/preview가 준비).
@@ -146,19 +129,28 @@ export function renderFrame(ctx: CanvasRenderingContext2D, p: KaraokeProject, ra
     ctx.restore();
     ctx.fillStyle = `rgba(0,0,0,${p.style.darken / 100})`;
     ctx.fillRect(0, 0, W, H);
+  } else {
+    ctx.save();
+    pal.draw(ctx, time, W, H);
+    ctx.restore();
   }
+  finishScene(ctx, pal, W, H);
+  if (!bg) drawScrim(ctx, pal, W, H);
 
   // 상단 메타 — V1은 외곽선이 없어 밝은 배경에서 읽히지 않았다.
   ctx.font = font(34, family);
   ctx.textBaseline = 'middle';
+  // 밝은 씬에서는 흰 글자에 검은 외곽선이 오히려 안 읽힌다. 명암을 뒤집는다.
+  const metaFill = pal.light && !bg ? 'rgba(20,20,30,.92)' : 'rgba(255,255,255,.92)';
+  const metaStroke = pal.light && !bg ? 'rgba(255,255,255,.85)' : 'rgba(0,0,0,.78)';
   const leftMeta = [p.meta.musical, p.meta.number].filter(Boolean).join(' · ');
   if (leftMeta) {
     ctx.textAlign = 'left';
-    outlined(ctx, leftMeta, 96, 84, 8, 'rgba(255,255,255,.92)');
+    outlined(ctx, leftMeta, 96, 84, 8, metaFill, metaStroke);
   }
   if (p.meta.title) {
     ctx.textAlign = 'right';
-    outlined(ctx, p.meta.title, W - 96, 84, 8, 'rgba(255,255,255,.92)');
+    outlined(ctx, p.meta.title, W - 96, 84, 8, metaFill, metaStroke);
   }
 
   const first = firstCue(p);
