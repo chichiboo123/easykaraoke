@@ -88,7 +88,14 @@ npm run check:deploy
 
 ## 폰트
 
-`public/fonts/TJJoyofsingingM.otf`에 **배포 권한을 확인한 첨부 원본**을 그대로 두어야 기본 영상 글꼴이 활성화됩니다. 저장소 생성 환경에는 요청에서 언급된 바이너리 첨부가 전달되지 않아 파일을 임의 다운로드하거나 대체하지 않았습니다. 다른 내장 후보도 각 OFL 원본을 같은 폴더에 배치할 수 있으며, 파일이 없으면 사용자에게 fallback 상태가 적용됩니다. 자세한 내용은 [FONT_LICENSE_NOTES.md](FONT_LICENSE_NOTES.md)를 확인하세요.
+기본 영상 글꼴인 **TJ 노래하는즐거움체 M**이 `public/fonts/TJJoyofsingingM.otf`에 포함되어 있습니다.
+제공받은 OTF 원본을 변환·subset·이름 변경 없이 그대로 두었습니다(라이선스 조건).
+
+나머지 후보 글꼴(Noto Sans KR, Jua, Do Hyeon, Gowun Dodum, Black Han Sans)은 아직 파일이 없습니다.
+앱은 불러오지 못한 글꼴을 `파일 없음` 배지와 함께 비활성 처리하므로, 고를 수 없는 글꼴이 고를 수 있는 것처럼 보이지 않습니다.
+
+**공개 배포 전 확인**: GitHub Pages 배포는 글꼴 파일의 재배포에 해당합니다. TJ미디어의 현재 재배포 조건을 반드시 확인하세요.
+자세한 내용은 [FONT_LICENSE_NOTES.md](FONT_LICENSE_NOTES.md)를 참고하세요.
 
 ## 기술
 
