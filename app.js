@@ -7,6 +7,7 @@ import { loadProjects, removeProject } from './lib/storage.js';
 import { acceptAudio, prepareScreen } from './lib/ui/prepare.js';
 import { clearStudioHooks, nudgeSelected, studioScreen, studioStamp, studioToggle, stopStudio } from './lib/ui/studio.js';
 import { finishScreen, stopFinish } from './lib/ui/finish.js';
+import { startHero, stopHero } from './lib/ui/hero.js';
 import { button, clock, confirmDialog, dropzone, el, icon, toast } from './lib/ui/shell.js';
 const app = document.getElementById('app');
 const THEME_KEY = 'yeogi-theme';
@@ -29,7 +30,8 @@ function initTheme() {
     catch {
         /* 무시 */
     }
-    applyTheme(stored ? stored === 'dark' : true);
+    // 기본은 라이트. 편집 화면은 어두운 무대를 쓰지만, 처음 만나는 화면은 밝게.
+    applyTheme(stored ? stored === 'dark' : false);
 }
 // ── 껍데기 ──────────────────────────────────────────────
 function chrome(body, opts = {}) {
@@ -95,6 +97,7 @@ function saveBadge() {
 function teardown() {
     stopStudio();
     stopFinish();
+    stopHero();
     clearStudioHooks();
 }
 export function go(step) {
@@ -132,24 +135,32 @@ async function home() {
     app.classList.remove('is-editor');
     const recent = await loadProjects().catch(() => []);
     const canRecord = typeof MediaRecorder !== 'undefined';
+    // 히어로는 이 앱이 만들어 주는 결과물 그 자체다. 설명보다 재생해 보이는 편이 빠르다.
+    const stage = el('canvas', { class: 'hero-canvas' });
+    stage.setAttribute('role', 'img');
+    stage.setAttribute('aria-label', '여기 있어 노래방이 만드는 노래방 반주 영상 미리보기');
     const hero = el('section', { class: 'hero' }, [
-        el('span', { class: 'hero-tag' }, [icon('lock'), el('span', { textContent: '모두 이 브라우저 안에서 처리돼요' })]),
-        el('h1', {}, [el('span', { textContent: '반주와 가사만 있으면' }), el('em', { textContent: '노래방 영상 완성' })]),
-        el('p', { class: 'lead', textContent: '노래를 들으면서 가사 한 줄마다 스페이스바를 한 번씩. 그것만 하면 됩니다. 나머지는 자동으로 맞춰져요.' }),
-        el('div', { class: 'row' }, [
-            button({ kind: 'primary', icon: 'add', label: '새 노래 만들기', onClick: createDialog }),
-            openFileButton(),
-        ]),
-        el('div', { class: 'how' }, [
-            step('library_music', '반주와 가사 넣기', 'MP3와 가사를 붙여넣기'),
-            step('ads_click', '줄마다 한 번 찍기', '한 곡에 20~40번이면 끝'),
-            step('movie', '영상으로 저장', 'MP4로 내려받기'),
+        el('div', { class: 'hero-screen' }, [stage, el('div', { class: 'hero-glow' })]),
+        el('div', { class: 'hero-copy' }, [
+            el('span', { class: 'hero-tag' }, [icon('graphic_eq'), el('span', { textContent: 'Easy Karaoke' })]),
+            el('h1', {}, [el('span', { textContent: '세상의 모든 음악,' }), el('em', { textContent: '노래방 반주 영상 뚝딱' })]),
+            el('p', { class: 'lead', textContent: '반주와 가사만 넣고, 노래를 들으며 한 줄마다 스페이스바 한 번. 나머지는 알아서 맞춰집니다.' }),
+            el('div', { class: 'hero-actions' }, [
+                button({ kind: 'primary', icon: 'play_circle', label: '새 노래 만들기', onClick: createDialog }),
+                openFileButton(),
+            ]),
+            el('p', { class: 'hero-note' }, [icon('lock'), el('span', { textContent: '음원과 작업 파일은 내 브라우저 밖으로 나가지 않아요.' })]),
         ]),
     ]);
+    const how = el('section', { class: 'how' }, [
+        step('1', 'library_music', '반주와 가사 넣기', 'MP3를 끌어다 놓고 가사를 붙여넣기'),
+        step('2', 'ads_click', '줄마다 한 번 찍기', '한 곡에 20~40번이면 끝나요'),
+        step('3', 'movie', '영상으로 저장', 'MP4로 내려받아 바로 재생'),
+    ]);
+    const body = el('div', { class: 'screen screen-home' }, [hero, how]);
     if (!canRecord) {
-        hero.append(el('p', { class: 'notice' }, [icon('info'), el('span', { textContent: '이 브라우저는 영상 저장을 지원하지 않아요. 만들기는 되지만 저장하려면 컴퓨터의 Chrome이나 Edge가 필요합니다.' })]));
+        body.append(el('p', { class: 'notice' }, [icon('info'), el('span', { textContent: '이 브라우저는 영상 저장을 지원하지 않아요. 만들기는 되지만 저장하려면 컴퓨터의 Chrome이나 Edge가 필요합니다.' })]));
     }
-    const body = el('div', { class: 'screen screen-home' }, [hero]);
     if (recent.length) {
         const list = el('div', { class: 'recent-grid' });
         for (const p of recent) {
@@ -174,9 +185,10 @@ async function home() {
             }));
             list.append(card);
         }
-        body.append(el('section', { class: 'panel' }, [el('div', { class: 'panel-head' }, [el('h2', { textContent: '이어서 만들기' })]), list]));
+        body.append(el('section', { class: 'panel recent-panel' }, [el('div', { class: 'panel-head' }, [el('h2', { textContent: '이어서 만들기' })]), list]));
     }
     chrome(body);
+    startHero(stage);
     // 홈에서 음원을 끌어다 놓으면 바로 새 프로젝트로 시작한다.
     dropzone(body, (f) => /^audio\//.test(f.type) || /\.(mp3|wav|m4a|aac)$/i.test(f.name), async (f) => {
         create(f.name.replace(/\.[^.]+$/, ''));
@@ -184,8 +196,13 @@ async function home() {
         go(1);
     });
 }
-function step(ic, title, detail) {
-    return el('div', { class: 'how-step' }, [icon(ic), el('b', { textContent: title }), el('small', { textContent: detail })]);
+function step(no, ic, title, detail) {
+    return el('div', { class: 'how-step' }, [
+        el('span', { class: 'how-no', textContent: no }),
+        icon(ic),
+        el('b', { textContent: title }),
+        el('small', { textContent: detail }),
+    ]);
 }
 function createDialog() {
     const dlg = el('dialog', { class: 'dialog' });
