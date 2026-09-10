@@ -177,17 +177,60 @@ html.no-icons .btn-iconly::after { content: attr(aria-label); font-size: var(--t
   font-size: var(--t-caption); font-weight: 800;
 }
 
-/* ── 홈 ──────────────────────────────────────────────── */
-.screen-home { gap: var(--s6); }
-.hero { display: flex; flex-direction: column; gap: var(--s4); padding-block: var(--s5); }
-.hero-tag { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; padding: 5px 12px; border-radius: var(--r-pill); background: var(--accent-soft); color: var(--accent-ink); font-size: var(--t-caption); font-weight: 700; }
+/* ── 홈 ──────────────────────────────────────────────
+   첫 화면은 노래방 반주가 시작되는 순간처럼. 설명 대신 결과물을 보여준다. */
+.screen-home { gap: var(--s6); padding-block: var(--s5) var(--s7); max-width: 1180px; }
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr);
+  gap: var(--s6);
+  align-items: center;
+}
+.hero-screen { position: relative; }
+/* 노래방 화면 바깥으로 번지는 빛 — 어두운 카드를 밝은 페이지에 자연스럽게 앉힌다. */
+.hero-glow {
+  position: absolute; inset: 12% 6% -10%;
+  background: radial-gradient(60% 60% at 50% 50%, rgba(120,90,220,.45), rgba(120,90,220,0) 70%);
+  filter: blur(38px); z-index: -1; pointer-events: none;
+}
+.hero-canvas {
+  display: block; width: 100%; aspect-ratio: 16 / 9; max-width: 100%;
+  border-radius: var(--r-lg);
+  background: #0b0a14;
+  box-shadow: 0 24px 60px -24px rgba(30,20,70,.55), 0 2px 0 rgba(255,255,255,.5) inset;
+}
+
+.hero-copy { display: flex; flex-direction: column; gap: var(--s3); }
+.hero-tag {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  padding: 5px 12px; border-radius: var(--r-pill);
+  background: var(--accent-soft); color: var(--accent-ink);
+  font-size: var(--t-caption); font-weight: 800; letter-spacing: .08em;
+}
 .hero-tag .mi { font-size: 15px; }
-.hero h1 { font-size: clamp(30px, 6vw, 48px); display: flex; flex-direction: column; }
+.hero h1 { font-size: clamp(28px, 3.4vw, 42px); display: flex; flex-direction: column; letter-spacing: -.02em; }
 .hero h1 em { font-style: normal; color: var(--accent-ink); }
-.how { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--s3); margin-top: var(--s3); }
-.how-step { display: flex; flex-direction: column; gap: var(--s1); padding: var(--s4); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
-.how-step .mi { color: var(--accent); font-size: 24px; }
+.hero .lead { font-size: 16px; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s2); }
+.hero-actions .btn { min-height: 48px; padding-inline: var(--s5); font-size: 16px; }
+.hero-note { display: inline-flex; align-items: center; gap: 6px; color: var(--subtle); font-size: var(--t-caption); }
+.hero-note .mi { font-size: 15px; }
+
+.how { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--s3); }
+.how-step {
+  position: relative; display: flex; flex-direction: column; gap: 3px;
+  padding: var(--s4) var(--s5); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--r-md);
+}
+.how-no {
+  position: absolute; top: var(--s3); right: var(--s4);
+  font-size: 30px; font-weight: 900; color: var(--line); line-height: 1;
+}
+.how-step .mi { color: var(--accent); font-size: 26px; }
+.how-step b { font-size: 16px; }
 .how-step small { color: var(--muted); font-size: var(--t-small); }
+
 .notice { display: flex; gap: var(--s2); align-items: flex-start; padding: var(--s3) var(--s4); border-radius: var(--r-md); background: var(--pastel-yellow); color: #4A3A00; font-size: var(--t-small); }
 :root[data-theme="dark"] .notice { background: #33270A; color: #F6DFA8; }
 
@@ -197,6 +240,11 @@ html.no-icons .btn-iconly::after { content: attr(aria-label); font-size: var(--t
 .recent-open:hover { background: var(--surface-2); }
 .recent-open b { font-size: 15px; }
 .recent-open small, .recent-card small { color: var(--subtle); font-size: var(--t-caption); }
+
+@media (max-width: 860px) {
+  .hero { grid-template-columns: 1fr; gap: var(--s4); }
+  .hero-copy { order: -1; }
+}
 
 /* ── 준비 화면 ────────────────────────────────────────── */
 .dropzone {
