@@ -307,6 +307,96 @@ test('무대 썸네일을 실제 렌더러로 그린다 (CSS 하드코딩 색 �
   assert.ok(colors > 20, `썸네일이 비어 있다 (색 ${colors}종)`);
 });
 
+test('저장 탭에 프로젝트 파일 저장 버튼이 있다', async () => {
+  await page.locator('.tab-bar .tab', { hasText: '저장' }).click();
+  await page.waitForTimeout(300);
+  const save = page.locator('.save-project .btn');
+  assert.equal(await save.count(), 1, '작업 파일 저장 버튼이 없다');
+  assert.ok((await save.innerText()).includes('작업 파일 저장'));
+});
+
+test('내보낸 MP4는 길이를 알 수 있고 진행바를 끌 수 있다', async () => {
+  // 실제로 짧은 영상을 만들어 <video>에 물려 본다.
+  // MediaRecorder 원본에는 총 길이도 조각 색인도 없어 탐색이 안 됐다.
+  const info = await page.evaluate(async () => {
+    const { newProject } = await import('./types.js');
+    const { parseLyrics, distribute } = await import('./lib/lyrics.js');
+    const { exportVideo, exportSupport } = await import('./lib/exporter.js');
+    const { setSource } = await import('./lib/audio.js');
+    if (!exportSupport().supported) return { skipped: true };
+
+    const p = newProject('탐색 시험');
+    p.blocks = parseLyrics('첫 줄이야\n둘째 줄이야', p.roles).blocks;
+    p.blocks[0].start = 0.5; p.blocks[0].end = 2; distribute(p.blocks[0]);
+    p.blocks[1].start = 2; p.blocks[1].end = 3.5; distribute(p.blocks[1]);
+
+    const sr = 44100, n = sr * 5;
+    const buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+    const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    w(0,'RIFF'); v.setUint32(4,36+n*2,true); w(8,'WAVEfmt ');
+    v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+    v.setUint32(24,sr,true); v.setUint32(28,sr*2,true); v.setUint16(32,2,true);
+    v.setUint16(34,16,true); w(36,'data'); v.setUint32(40,n*2,true);
+    for (let i = 0; i < n; i++) v.setInt16(44+i*2, Math.sin(i/26)*9000, true);
+    p.media.duration = await setSource(new Blob([buf], { type: 'audio/wav' }));
+
+    const blob = await exportVideo({
+      project: p, height: 720, monitor: false,
+      signal: new AbortController().signal, onProgress: () => {},
+    });
+
+    const video = document.createElement('video');
+    video.src = URL.createObjectURL(blob);
+    video.muted = true;
+    await new Promise((ok) => { video.onloadedmetadata = ok; setTimeout(ok, 6000); });
+    const target = 3;
+    const seeked = await new Promise((ok) => {
+      video.onseeked = () => ok(true);
+      video.currentTime = target;
+      setTimeout(() => ok(false), 5000);
+    });
+    // 파일 구조를 직접 확인한다. 크롬은 색인이 없어도 알아서 탐색하므로
+    // 재생 테스트만으로는 헤더가 비어 있는 것을 잡아내지 못한다.
+    // 다른 플레이어에서 진행바가 안 움직이던 원인이 바로 이 헤더다.
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const dv = new DataView(bytes.buffer);
+    const ascii = (at) => String.fromCharCode(bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]);
+    let mvhdDuration = 0;
+    let hasMfra = false;
+    for (let i = 0; i + 8 < bytes.length; i++) {
+      if (ascii(i) === 'mvhd' && !mvhdDuration) {
+        const ver = bytes[i + 4];
+        mvhdDuration = ver === 0
+          ? dv.getUint32(i + 20) / dv.getUint32(i + 16)
+          : Number(dv.getBigUint64(i + 28)) / dv.getUint32(i + 24);
+      }
+      if (ascii(i) === 'mfra') hasMfra = true;
+    }
+
+    return {
+      type: blob.type,
+      duration: video.duration,
+      seekable: video.seekable.length ? video.seekable.end(0) : 0,
+      seeked,
+      landedAt: video.currentTime,
+      mvhdDuration,
+      hasMfra,
+    };
+  });
+
+  if (info.skipped) return; // 녹화를 지원하지 않는 환경
+  assert.ok(Number.isFinite(info.duration) && info.duration > 3, `길이를 알 수 없다 (${info.duration})`);
+  assert.ok(info.seekable > 3, `탐색 가능 구간이 없다 (${info.seekable})`);
+  assert.equal(info.seeked, true, '진행바 이동이 동작하지 않는다');
+  assert.ok(Math.abs(info.landedAt - 3) < 0.6, `엉뚱한 지점으로 이동했다 (${info.landedAt})`);
+
+  if (info.type.includes('mp4')) {
+    // MediaRecorder 원본은 mvhd.duration = 0 이고 mfra 가 없다.
+    assert.ok(info.mvhdDuration > 3, `파일에 총 길이가 적혀 있지 않다 (mvhd duration ${info.mvhdDuration}초)`);
+    assert.equal(info.hasMfra, true, '조각 색인(mfra)이 없어 다른 플레이어에서 탐색이 안 된다');
+  }
+});
+
 test('전체 과정에서 자바스크립트 오류가 없었다', () => {
   assert.deepEqual(pageErrors, []);
 });

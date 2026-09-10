@@ -444,6 +444,14 @@ html.no-icons .btn-iconly::after { content: attr(data-fallback); font-size: var(
 .check-item.is-ok .mi { color: var(--color-success); }
 .check-item.is-warn .mi { color: var(--color-warning); }
 
+/* 프로젝트 파일 저장 — 영상 만들기와 구분되는 별개의 행동이라 따로 묶는다. */
+.save-project {
+  display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; justify-content: space-between;
+  padding: var(--s3) var(--s4); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2);
+}
+.save-project div { display: flex; flex-direction: column; min-width: 0; flex: 1 1 200px; }
+.save-project small { color: var(--muted); font-size: var(--t-caption); }
+
 .export-notes { margin: 0; padding-left: 1.15em; color: var(--muted); font-size: var(--t-small); display: flex; flex-direction: column; gap: 4px; }
 .export-notes .warn { color: var(--color-warning); }
 .export-progress { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); padding: var(--s4); background: var(--surface-2); border-radius: var(--r-md); }

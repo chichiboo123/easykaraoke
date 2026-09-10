@@ -4,6 +4,7 @@ import { ensureGlyphs, fonts, loadCustomFont, refreshCdnFonts, resolveFamily, te
 import { firstCue } from '../frame.js';
 import { lyricCount, timedCount } from '../lyrics.js';
 import { renderFrame } from '../renderer.js';
+import { savePackage } from '../package.js';
 import { commit, markFileDirty, project, refreshBackground, setBackground, state } from '../store.js';
 import { SCENES, SCENE_GROUPS } from '../scenes.js';
 import { button, clock, el, filePicker, icon, previewCanvas, sizeCanvas, toast } from './shell.js';
@@ -425,7 +426,15 @@ function exportPanel(go: (s: 1 | 2 | 3) => void): HTMLElement {
   return el('section', { class: 'panel panel-export' }, [
     el('div', { class: 'panel-head' }, [el('h2', { textContent: '저장하기' })]),
     checks,
-    el('div', { class: 'row' }, [makeBtn, testBtn, button({ kind: 'ghost', icon: 'tune', label: '타이밍 더 다듬기', onClick: () => go(2) })]),
+    el('div', { class: 'row' }, [makeBtn, testBtn]),
+    el('div', { class: 'save-project' }, [
+      el('div', {}, [
+        el('b', { textContent: '프로젝트 파일로 저장' }),
+        el('small', { textContent: '반주·가사·타이밍·디자인을 한 파일(.mkaraoke)로 보관해요. 다른 기기에서 이어서 만들 수 있어요.' }),
+      ]),
+      button({ kind: 'secondary', icon: 'save', label: '작업 파일 저장', onClick: () => savePackage() }),
+    ]),
+    el('div', { class: 'row' }, [button({ kind: 'ghost', icon: 'tune', label: '타이밍 더 다듬기', onClick: () => go(2) })]),
     notes,
     box,
     result,

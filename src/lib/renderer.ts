@@ -207,30 +207,33 @@ function drawIntro(ctx: CanvasRenderingContext2D, p: KaraokeProject, time: numbe
   const showCard = remain > p.intro.seconds || !p.intro.countdown;
 
   if (showCard) {
-    // 실제 노래방 시작 화면처럼 제목을 크게, 그 아래 항목별로 라벨을 단다.
+    // 실제 노래방 시작 화면 배치. 제목은 가운데 위쪽, 만든 사람들은 좌측 하단.
     if (p.meta.musical) {
       ctx.font = font(46, family);
-      outlined(ctx, p.meta.musical, W / 2, 250, 9, 'rgba(255,255,255,.85)');
+      outlined(ctx, p.meta.musical, W / 2, 330, 9, 'rgba(255,255,255,.85)');
     }
     const title = [p.meta.number, p.meta.title].filter(Boolean).join('  ');
     ctx.font = fitFont(ctx, title, 1560, 108, family);
-    outlined(ctx, title, W / 2, 390, 16, '#ffffff');
+    outlined(ctx, title, W / 2, 480, 16, '#ffffff');
 
-    // 노래 / 작사 / 작곡 — 라벨은 강조색, 값은 흰색으로 나란히.
-    const rows: [string, string][] = [
-      ['노래', p.meta.artist],
-      ['작사', p.meta.lyricist],
-      ['작곡', p.meta.composer],
-    ].filter((r): r is [string, string] => Boolean(r[1]));
+    // 노래 / 작사 / 작곡 — 라벨은 강조색, 값은 흰색. 좌측 하단에 세로로 쌓는다.
+    const rows: [string, string][] = (
+      [
+        ['노래', p.meta.artist],
+        ['작사', p.meta.lyricist],
+        ['작곡', p.meta.composer],
+      ] as [string, string][]
+    ).filter((r) => Boolean(r[1]));
 
     if (rows.length) {
-      ctx.font = font(44, family);
+      ctx.font = font(46, family);
       const labelW = Math.max(...rows.map((r) => ctx.measureText(r[0]).width));
-      const valueW = Math.max(...rows.map((r) => ctx.measureText(r[1]).width));
-      const gap = 42;
-      const left = W / 2 - (labelW + gap + valueW) / 2;
+      const gap = 40;
+      const left = 150;
+      // 아래에서부터 쌓아 올려 항목 수가 달라져도 바닥선이 유지된다.
+      const bottom = 930;
       rows.forEach(([label, value], i) => {
-        const y = 560 + i * 74;
+        const y = bottom - (rows.length - 1 - i) * 78;
         ctx.textAlign = 'left';
         outlined(ctx, label, left, y, 9, point);
         outlined(ctx, value, left + labelW + gap, y, 9, '#ffffff');
