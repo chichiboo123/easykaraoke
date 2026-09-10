@@ -7,6 +7,7 @@ import { loadProjects, removeProject } from './lib/storage.js';
 import { acceptAudio, prepareScreen } from './lib/ui/prepare.js';
 import { clearStudioHooks, nudgeSelected, studioScreen, studioStamp, studioToggle, stopStudio } from './lib/ui/studio.js';
 import { finishScreen, stopFinish } from './lib/ui/finish.js';
+import { decodeBlob, parsePackage, savePackage, type Encoded } from './lib/package.js';
 import { startHero, stopHero } from './lib/ui/hero.js';
 import { button, clock, confirmDialog, dropzone, el, icon, toast } from './lib/ui/shell.js';
 
@@ -240,17 +241,17 @@ function createDialog(): void {
   const form = el('form', { class: 'stack' });
 
   // 입력한 항목만 결과 영상 첫 화면에 나온다. 그래서 전부 선택이고 제목만 필수다.
-  const fields: [keyof KaraokeProject['meta'], string, string, boolean][] = [
-    ['title', '곡 제목', '예) 아리랑', true],
-    ['artist', '노래 (가수명)', '예) SG워너비', false],
-    ['lyricist', '작사', '예) 안영민', false],
-    ['composer', '작곡', '예) 조영수', false],
-    ['musical', '작품명', '예) 우리들의 봄', false],
+  const fields: [keyof KaraokeProject['meta'], string, boolean][] = [
+    ['title', '곡 제목', true],
+    ['artist', '노래 (가수명)', false],
+    ['lyricist', '작사', false],
+    ['composer', '작곡', false],
+    ['musical', '작품명', false],
   ];
 
   const inputs = new Map<string, HTMLInputElement>();
-  for (const [key, label, placeholder, required] of fields) {
-    const input = el('input', { class: 'input', name: key, placeholder, required });
+  for (const [key, label, required] of fields) {
+    const input = el('input', { class: 'input', name: key, required });
     input.setAttribute('aria-label', label);
     inputs.set(key, input);
     form.append(
@@ -338,54 +339,20 @@ function openFileButton(): HTMLElement {
 
 async function importPackage(file: File): Promise<void> {
   try {
-    const raw = JSON.parse(await file.text()) as { format?: string; project?: unknown; audio?: Encoded; background?: Encoded; font?: Encoded };
-    if (raw.format !== 'mkaraoke' || !raw.project) throw new Error('형식이 다릅니다');
-    const p = migrate(raw.project as KaraokeProject);
+    const raw = JSON.parse(await file.text()) as { audio?: Encoded; background?: Encoded; font?: Encoded };
+    const p = parsePackage(raw);
     const existing = (await loadProjects().catch(() => [])).find((x) => x.id === p.id);
     if (existing) {
       const ok = await confirmDialog({ title: '같은 작업이 이미 있어요', body: `"${existing.meta.title}"을(를) 이 파일의 내용으로 바꿀까요?`, confirm: '덮어쓰기', danger: true });
       if (!ok) return;
     }
-    adopt(p, { audio: decode(raw.audio), background: decode(raw.background), font: decode(raw.font) });
+    adopt(p, { audio: decodeBlob(raw.audio), background: decodeBlob(raw.background), font: decodeBlob(raw.font) });
     await restoreFiles();
     toast('작업을 열었어요.', 'success');
     go(state.project!.media.name ? 2 : 1);
   } catch {
     toast('이 파일은 열 수 없어요. .mkaraoke 파일인지 확인해 주세요.', 'error');
   }
-}
-
-type Encoded = { type: string; data: string } | null | undefined;
-
-function decode(x: Encoded): Blob | undefined {
-  if (!x) return undefined;
-  const bin = atob(x.data);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return new Blob([bytes], { type: x.type });
-}
-
-async function encode(b?: Blob): Promise<Encoded> {
-  if (!b) return null;
-  const bytes = new Uint8Array(await b.arrayBuffer());
-  let s = '';
-  for (let i = 0; i < bytes.length; i += 32768) s += String.fromCharCode(...bytes.subarray(i, i + 32768));
-  return { type: b.type, data: btoa(s) };
-}
-
-export async function downloadPackage(): Promise<void> {
-  const p = project();
-  toast('작업 파일을 만드는 중이에요…');
-  const payload = {
-    format: 'mkaraoke',
-    project: structuredClone(p),
-    audio: await encode(state.files.audio),
-    background: await encode(state.files.background),
-    font: await encode(state.files.font),
-  };
-  const a = el('a', { href: URL.createObjectURL(new Blob([JSON.stringify(payload)], { type: 'application/json' })), download: `${p.meta.title || '노래방'}.mkaraoke` });
-  a.click();
-  URL.revokeObjectURL(a.href);
 }
 
 // ── 전역 단축키 ──────────────────────────────────────────
@@ -406,7 +373,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (mod && e.key.toLowerCase() === 's') {
     e.preventDefault();
-    if (state.project) downloadPackage();
+    if (state.project) savePackage();
     return;
   }
   if (!state.project || state.step !== 2) return;

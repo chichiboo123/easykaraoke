@@ -1,6 +1,7 @@
 import type { KaraokeProject } from '../types.js';
 import { audio, ensureGraph, resume, setMonitor, setRate } from './audio.js';
 import { ensureGlyphs, textForProject } from './fonts.js';
+import { finalizeMp4 } from './mp4.js';
 import { renderFrame } from './renderer.js';
 
 export type ExportStatus = { percent: number; stage: string; eta: number };
@@ -182,7 +183,9 @@ export async function exportVideo(opts: ExportOptions): Promise<Blob> {
           '브라우저가 이 탭의 작업을 늦춘 것 같아요. 다시 시도해 주시고, 되도록 이 탭을 열어 둔 채로 두세요.',
       );
     }
-    return new Blob(chunks, { type: support.container === 'mp4' ? 'video/mp4' : 'video/webm' });
+    const raw = new Blob(chunks, { type: support.container === 'mp4' ? 'video/mp4' : 'video/webm' });
+    // 녹화된 fMP4에는 총 길이도 조각 색인도 없어 진행바를 끌 수 없다. 여기서 채워 넣는다.
+    return support.container === 'mp4' ? await finalizeMp4(raw) : raw;
   } finally {
     // 어떤 경로로 끝나든 반드시 정리한다. AudioContext는 닫지 않는다(닫으면 앱 전체가 무음).
     stopTicker();
