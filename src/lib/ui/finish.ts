@@ -2,7 +2,7 @@ import { audio, resume } from '../audio.js';
 import { exportSupport, exportVideo } from '../exporter.js';
 import { ensureGlyphs, fonts, loadCustomFont, refreshCdnFonts, resolveFamily, textForProject } from '../fonts.js';
 import { firstCue } from '../frame.js';
-import { timedCount } from '../lyrics.js';
+import { lyricCount, timedCount } from '../lyrics.js';
 import { renderFrame } from '../renderer.js';
 import { commit, markFileDirty, project, refreshBackground, setBackground, state } from '../store.js';
 import { SCENES, SCENE_GROUPS } from '../scenes.js';
@@ -331,7 +331,7 @@ function exportPanel(go: (s: 1 | 2 | 3) => void): HTMLElement {
   const p = project();
   const support = exportSupport();
   const timed = timedCount(p.blocks);
-  const total = p.blocks.length;
+  const total = lyricCount(p.blocks);
 
   const checks = el('div', { class: 'checklist' }, [
     check(!!p.media.name, '반주', p.media.name || '반주가 필요해요'),

@@ -4,7 +4,7 @@ export const newProject = (title) => ({
     id: uid(),
     updatedAt: Date.now(),
     musicalMode: false,
-    meta: { title, musical: '', number: '', composer: '', lyricist: '' },
+    meta: { title, artist: '', musical: '', number: '', composer: '', lyricist: '' },
     roles: [{ id: 'all', name: '전체', color: '#ffd43b' }],
     blocks: [],
     style: { preset: 'classic', fontFamily: 'TJ Joy', colorMode: 'common', progress: true, brightness: 100, darken: 30, blur: 0 },

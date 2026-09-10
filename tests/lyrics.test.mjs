@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 // V1 테스트는 구현을 import하지 않고 복사해 둬서, 실제 코드가 깨져도 통과했다.
 // V2는 컴파일된 실제 모듈을 그대로 검사한다.
-import { parseLyrics, segmentKorean, mergeBlocks, distribute } from '../lib/lyrics.js';
+import { parseLyrics, segmentKorean, mergeBlocks, distribute, makeInterlude, lyricCount, timedCount } from '../lib/lyrics.js';
 import { segmentProgress, blockAt } from '../lib/frame.js';
 import { newProject, migrate } from '../types.js';
 
@@ -99,4 +99,37 @@ test('V1 프로젝트가 블록 구간과 음절 오프셋을 갖춘 V2로 올�
   // "함"은 원문에서 공백 뒤 3번째 글자다.
   assert.equal(p.blocks[0].segments[2].charStart, 3);
   assert.equal(p.blocks[0].text.slice(p.blocks[0].segments[2].charStart, p.blocks[0].segments[2].charEnd), '함');
+});
+
+test('빈 구간에서는 어떤 가사도 보여주지 않는다', () => {
+  const p = newProject('t');
+  p.blocks = parseLyrics('첫 줄\n둘째 줄', roles).blocks;
+  p.blocks[0].start = 1; p.blocks[0].end = 2;
+  p.blocks[1].start = 5; p.blocks[1].end = 6;
+  // 2~5초는 가사가 없는 구간. 예전에는 다음 줄을 미리 띄워 이전 가사가 남은 것처럼 보였다.
+  assert.equal(blockAt(p, 3.5).block, undefined);
+  assert.equal(blockAt(p, 1.5).block?.text, '첫 줄');
+  assert.equal(blockAt(p, 5.5).block?.text, '둘째 줄');
+});
+
+test('간주 블록은 진행률 계산에서 빠진다', () => {
+  const p = newProject('t');
+  p.blocks = parseLyrics('첫 줄\n둘째 줄', roles).blocks;
+  p.blocks[0].start = 1; p.blocks[0].end = 2;
+  p.blocks.splice(1, 0, makeInterlude(2, 5, 'all'));
+  assert.equal(lyricCount(p.blocks), 2, '간주는 줄 수에 넣지 않는다');
+  assert.equal(timedCount(p.blocks), 1, '간주는 찍은 줄로 세지 않는다');
+  assert.equal(blockAt(p, 3).block?.kind, 'interlude', '간주 구간에는 간주 블록이 보인다');
+});
+
+test('가사를 다시 적용해도 간주 블록이 살아남는다', () => {
+  const first = parseLyrics('첫 줄\n둘째 줄', roles);
+  first.blocks[0].start = 1; first.blocks[0].end = 2;
+  first.blocks[1].start = 5; first.blocks[1].end = 6;
+  first.blocks.splice(1, 0, makeInterlude(2, 5, 'all'));
+  const merged = mergeBlocks(first.blocks, parseLyrics('첫 줄\n둘째 줄', roles).blocks);
+  const gap = merged.blocks.find((b) => b.kind === 'interlude');
+  assert.ok(gap, '간주가 사라졌다');
+  assert.equal(gap.start, 2);
+  assert.equal(merged.blocks.indexOf(gap), 1, '간주가 시간 순서대로 들어가야 한다');
 });

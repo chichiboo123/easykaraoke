@@ -112,7 +112,7 @@ p { margin: 0; }
 }
 html.no-icons .mi { display: none; }
 /* 아이콘 폰트가 없을 때 아이콘 전용 버튼이 빈 칸이 되지 않도록 라벨을 글자로 보여준다. */
-html.no-icons .btn-iconly::after { content: attr(aria-label); font-size: var(--t-caption); font-weight: 600; }
+html.no-icons .btn-iconly::after { content: attr(data-fallback); font-size: var(--t-caption); font-weight: 700; }
 
 /* ── 버튼: 위계 4종. V1은 전역 button 규칙이 전부 같은 흰 알약으로 만들었다 ── */
 .btn {
@@ -333,7 +333,12 @@ html.no-icons .btn-iconly::after { content: attr(aria-label); font-size: var(--t
 }
 .editor-bottom { grid-column: 1 / -1; grid-row: 2; display: flex; flex-direction: column; gap: var(--s2); }
 
-.side-head { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s3); align-items: baseline; }
+.side-head { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3); align-items: baseline; }
+.side-tools { display: flex; gap: var(--s2); flex: 1 0 100%; }
+.side-tools .btn { flex: 1; min-height: 34px; font-size: var(--t-caption); padding-inline: var(--s2); }
+/* 간주 블록은 가사가 아니므로 한눈에 구분되게 */
+.block-card.is-interlude { border-left-color: var(--subtle); background: var(--surface-2); }
+.block-card.is-interlude .block-text { font-style: italic; color: var(--muted); }
 .side-foot { margin-top: auto; padding-top: var(--s3); border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: var(--s2); }
 .side-foot .btn { flex: 1; }
 .transport-slim { flex: none; }
@@ -394,13 +399,15 @@ html.no-icons .btn-iconly::after { content: attr(aria-label); font-size: var(--t
 .block-card.is-next { background: var(--accent-soft); }
 .block-card.is-untimed { border-left-color: var(--line); }
 .block-num { color: var(--subtle); font-size: var(--t-caption); font-variant-numeric: tabular-nums; text-align: right; }
-.block-time { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; padding: 4px 6px; border-radius: var(--r-sm); font-variant-numeric: tabular-nums; font-size: var(--t-small); }
+.block-time { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; padding: 4px 6px; border-radius: var(--r-sm); font-variant-numeric: tabular-nums; font-size: var(--t-small); white-space: nowrap; }
 .block-time:hover { background: var(--surface-2); }
 .block-time small { color: var(--subtle); }
 .block-text { min-width: 0; width: 100%; padding: 6px var(--s2); border: 1px solid transparent; border-radius: var(--r-sm); background: transparent; color: var(--ink); font: inherit; font-weight: 600; }
 .block-text:hover { border-color: var(--line); }
 .block-text:focus { outline: none; border-color: var(--accent); background: var(--surface); }
-.block-actions { display: flex; align-items: center; gap: var(--s1); }
+.block-actions { display: flex; align-items: center; gap: 0; }
+.block-actions .btn { min-height: 30px; padding: 2px 5px; }
+.block-actions .btn .mi { font-size: 17px; }
 .block-role { padding: 4px var(--s2); border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font: inherit; font-size: var(--t-caption); max-width: 110px; }
 
 /* ── 꾸미기 화면 ──────────────────────────────────────── */
@@ -460,6 +467,11 @@ html.no-icons .btn-iconly::after { content: attr(aria-label); font-size: var(--t
 .dialog { border: 1px solid var(--line); border-radius: var(--r-lg); padding: var(--s5); background: var(--surface); color: var(--ink); max-width: min(440px, calc(100vw - 32px)); box-shadow: var(--shadow); }
 .dialog::backdrop { background: rgba(10, 8, 18, .55); }
 .dialog h2 { margin-bottom: var(--s2); }
+.dialog-create { max-width: min(460px, calc(100vw - 32px)); }
+.dialog-create .stack { gap: var(--s3); }
+.dialog-create .field span { display: flex; align-items: baseline; }
+.field .req { color: var(--color-error); font-weight: 700; }
+.field .opt { color: var(--subtle); font-size: 11px; font-weight: 400; }
 .dialog p { color: var(--muted); font-size: var(--t-small); margin-bottom: var(--s4); }
 .dialog-actions { display: flex; gap: var(--s2); justify-content: flex-end; margin-top: var(--s4); }
 

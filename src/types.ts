@@ -13,6 +13,8 @@ export type LyricBlock = {
   id: string;
   text: string;
   roleId: string;
+  /** 'interlude'는 가사가 아니라 간주 표시. 빈 구간을 채우는 용도. */
+  kind?: 'lyric' | 'interlude';
   /** 블록이 1급 시민이다. 음절 타이밍은 이 구간에서 파생된다. */
   start: number;
   end: number;
@@ -41,7 +43,7 @@ export type KaraokeProject = {
   id: string;
   updatedAt: number;
   musicalMode: boolean;
-  meta: { title: string; musical: string; number: string; composer: string; lyricist: string };
+  meta: { title: string; artist: string; musical: string; number: string; composer: string; lyricist: string };
   roles: Role[];
   blocks: LyricBlock[];
   style: ProjectStyle;
@@ -59,7 +61,7 @@ export const newProject = (title: string): KaraokeProject => ({
   id: uid(),
   updatedAt: Date.now(),
   musicalMode: false,
-  meta: { title, musical: '', number: '', composer: '', lyricist: '' },
+  meta: { title, artist: '', musical: '', number: '', composer: '', lyricist: '' },
   roles: [{ id: 'all', name: '전체', color: '#ffd43b' }],
   blocks: [],
   style: { preset: 'classic', fontFamily: 'TJ Joy', colorMode: 'common', progress: true, brightness: 100, darken: 30, blur: 0 },

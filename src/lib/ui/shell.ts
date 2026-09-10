@@ -19,7 +19,16 @@ export function icon(name: string): HTMLElement {
   return el('span', { class: 'mi', textContent: name, ariaHidden: 'true' });
 }
 
-type ButtonOpts = { kind?: 'primary' | 'secondary' | 'ghost' | 'danger'; icon?: string; label?: string; title?: string; disabled?: boolean; onClick?: () => void };
+type ButtonOpts = {
+  kind?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  icon?: string;
+  label?: string;
+  title?: string;
+  /** 아이콘 폰트를 못 불러왔을 때 대신 보여줄 짧은 기호. 없으면 title을 쓴다. */
+  fallback?: string;
+  disabled?: boolean;
+  onClick?: () => void;
+};
 
 export function button(opts: ButtonOpts): HTMLButtonElement {
   // 아이콘만 있는 버튼은 아이콘 폰트가 없으면 빈 사각형이 된다.
@@ -32,6 +41,8 @@ export function button(opts: ButtonOpts): HTMLButtonElement {
     b.title = opts.title;
     if (!opts.label) b.setAttribute('aria-label', opts.title);
   }
+  // 라벨 전체를 그대로 내보내면 좁은 칸에서 넘친다. 짧은 기호를 우선한다.
+  if (iconOnly) b.dataset.fallback = opts.fallback ?? opts.title ?? '•';
   b.disabled = !!opts.disabled;
   if (opts.onClick) b.onclick = opts.onClick;
   return b;

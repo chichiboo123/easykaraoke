@@ -161,7 +161,15 @@ export function renderFrame(ctx: CanvasRenderingContext2D, p: KaraokeProject, ra
     drawIntro(ctx, p, time, first, family, pal.point);
   } else {
     const { block, next } = blockAt(p, time);
-    if (block) {
+    if (block?.kind === 'interlude') {
+      ctx.textAlign = 'center';
+      ctx.font = font(78, family);
+      outlined(ctx, `♪ ${block.text} ♪`, W / 2, pal.lyricY, 12, 'rgba(255,255,255,.88)');
+      if (next) {
+        ctx.font = fitFont(ctx, next.text, 1500, 58, family);
+        outlined(ctx, next.text, W / 2, pal.lyricY + 170, 10, 'rgba(255,255,255,.62)');
+      }
+    } else if (block) {
       const role = p.roles.find((r) => r.id === block.roleId);
       const fill = p.musicalMode && p.style.colorMode === 'role' ? role?.color || pal.point : pal.point;
       if (p.musicalMode && role) badge(ctx, role.name, role.color, family, pal.lyricY - 230);
@@ -199,17 +207,35 @@ function drawIntro(ctx: CanvasRenderingContext2D, p: KaraokeProject, time: numbe
   const showCard = remain > p.intro.seconds || !p.intro.countdown;
 
   if (showCard) {
+    // 실제 노래방 시작 화면처럼 제목을 크게, 그 아래 항목별로 라벨을 단다.
     if (p.meta.musical) {
-      ctx.font = font(54, family);
-      outlined(ctx, p.meta.musical, W / 2, 360, 10, 'rgba(255,255,255,.9)');
+      ctx.font = font(46, family);
+      outlined(ctx, p.meta.musical, W / 2, 250, 9, 'rgba(255,255,255,.85)');
     }
     const title = [p.meta.number, p.meta.title].filter(Boolean).join('  ');
-    ctx.font = fitFont(ctx, title, 1600, 92, family);
-    outlined(ctx, title, W / 2, 500, 14, '#ffffff');
-    const credit = [p.meta.composer && `작곡 ${p.meta.composer}`, p.meta.lyricist && `작사 ${p.meta.lyricist}`].filter(Boolean).join('   ');
-    if (credit) {
-      ctx.font = font(36, family);
-      outlined(ctx, credit, W / 2, 600, 8, 'rgba(255,255,255,.85)');
+    ctx.font = fitFont(ctx, title, 1560, 108, family);
+    outlined(ctx, title, W / 2, 390, 16, '#ffffff');
+
+    // 노래 / 작사 / 작곡 — 라벨은 강조색, 값은 흰색으로 나란히.
+    const rows: [string, string][] = [
+      ['노래', p.meta.artist],
+      ['작사', p.meta.lyricist],
+      ['작곡', p.meta.composer],
+    ].filter((r): r is [string, string] => Boolean(r[1]));
+
+    if (rows.length) {
+      ctx.font = font(44, family);
+      const labelW = Math.max(...rows.map((r) => ctx.measureText(r[0]).width));
+      const valueW = Math.max(...rows.map((r) => ctx.measureText(r[1]).width));
+      const gap = 42;
+      const left = W / 2 - (labelW + gap + valueW) / 2;
+      rows.forEach(([label, value], i) => {
+        const y = 560 + i * 74;
+        ctx.textAlign = 'left';
+        outlined(ctx, label, left, y, 9, point);
+        outlined(ctx, value, left + labelW + gap, y, 9, '#ffffff');
+      });
+      ctx.textAlign = 'center';
     }
   }
 
