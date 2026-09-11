@@ -179,6 +179,15 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
   const tuning = el('div', { class: 'tuning' }, [
     el('label', { class: 'tuning-item' }, [el('span', { textContent: '타이밍 밀기' }), offset, offsetOut]),
     el('div', { class: 'tuning-item zoom-group' }, [zoomOut, zoomOut2, zoomIn, fitBtn, followBtn]),
+    // 목록을 맨 위로 올리지 않아도 되도록 타임라인 곁에도 같은 조작을 둔다.
+    button({ kind: 'ghost', icon: 'more_horiz', label: '간주 넣기', title: '지금 자리의 빈 구간을 간주중으로 (I)', onClick: () => addInterlude() }),
+    button({
+      kind: 'ghost',
+      icon: 'delete_outline',
+      label: '마디 지우기',
+      title: '고른 마디를 지워요 (Delete)',
+      onClick: () => studioDelete?.(),
+    }),
     button({
       kind: 'ghost',
       icon: 'skip_next',
@@ -203,8 +212,11 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
     touch(() => {
       cur.timing.mode = modeToggle.checked ? 'syllable' : 'line';
       if (modeToggle.checked) {
-        // 처음부터 찍는 경우도 있으므로 "아직 안 찍은 줄"도 대상이다.
-        if (!canFine(cur.blocks[state.selected])) state.selected = cur.blocks.findIndex((b) => canFine(b) && b.end <= b.start);
+        // 아직 아무 줄도 안 찍었다면 처음부터 찍는 상황이다.
+        // 이전 화면에서 골라 둔 줄이 남아 있어도 무시하고 첫 줄에서 시작한다.
+        const nothingTimed = !cur.blocks.some((b) => canFine(b) && b.end > b.start);
+        if (nothingTimed) state.selected = cur.blocks.findIndex((b) => canFine(b));
+        else if (!canFine(cur.blocks[state.selected])) state.selected = cur.blocks.findIndex((b) => canFine(b) && b.end <= b.start);
         if (state.selected < 0) state.selected = cur.blocks.findIndex((b) => canFine(b));
         const block = cur.blocks[state.selected];
         cur.timing.fineBlock = block?.id;
@@ -266,7 +278,7 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
         el('span', { class: 'hint', textContent: '카드를 누르면 그 자리로 이동해요.' }),
         el('div', { class: 'side-tools' }, [
           button({ kind: 'secondary', icon: 'playlist_add', label: '줄 추가', onClick: () => addBlock() }),
-          button({ kind: 'secondary', icon: 'more_horiz', label: '간주 넣기', title: '지금 재생 위치의 빈 구간을 간주중으로 채워요', onClick: () => addInterlude() }),
+          button({ kind: 'secondary', icon: 'more_horiz', label: '간주 넣기', title: '지금 재생 위치의 빈 구간을 간주중으로 채워요 (I)', onClick: () => addInterlude() }),
         ]),
       ]),
       cards,
@@ -305,7 +317,13 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
     audio.currentTime = Math.max(0, Math.min(project().media.duration, t));
   }
 
-  function select(index: number) {
+  /** 고른 줄이 목록 밖에 있으면 보이는 자리로 끌어온다. */
+  function revealCard(index: number) {
+    const card = cards.children[index];
+    if (card instanceof HTMLElement) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  function select(index: number, reveal = true) {
     state.selected = index;
     const cur = project();
     if (cur.timing.mode === 'syllable' && canFine(cur.blocks[index])) {
@@ -315,6 +333,7 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
       renderFine();
     }
     renderCards();
+    if (reveal) revealCard(index);
   }
 
   /**
@@ -909,7 +928,31 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
     raf = requestAnimationFrame(tick);
   };
 
+  /**
+   * 지금 고른 마디를 지운다. 타임라인에서 고르고 Delete를 눌러도 여기로 온다.
+   * 확인 대화상자 대신 되돌리기 토스트를 쓴다. 키 한 번에 모달이 뜨면 흐름이 끊긴다.
+   */
+  function deleteSelected(): boolean {
+    const cur = project();
+    const i = state.selected;
+    const block = cur.blocks[i];
+    if (!block) {
+      toast('먼저 지울 마디를 골라 주세요.');
+      return false;
+    }
+    removeBlock(i);
+    toast(`"${block.text}" 줄을 지웠어요.`, 'info', {
+      label: '되돌리기',
+      run: () => {
+        if (undo()) refreshAll();
+      },
+    });
+    return true;
+  }
+
   // 스탬프 단축키는 app.ts의 전역 핸들러가 이 함수를 부른다.
+  studioDelete = deleteSelected;
+  studioInterlude = addInterlude;
   studioStamp = (eventTime?: number) => (project().timing.mode === 'syllable' ? fineStamp(eventTime) : stamp(eventTime));
   studioToggle = togglePlay;
   studioRefresh = refreshAll;
@@ -932,12 +975,16 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
 
 // app.ts의 전역 단축키가 현재 화면의 동작에 닿기 위한 연결점.
 export let studioStamp: ((eventTime?: number) => void) | null = null;
+export let studioDelete: (() => boolean) | null = null;
+export let studioInterlude: (() => void) | null = null;
 export let studioToggle: (() => void) | null = null;
 export let studioRefresh: (() => void) | null = null;
 export let studioSeek: ((t: number) => void) | null = null;
 
 export function clearStudioHooks(): void {
   studioStamp = null;
+  studioDelete = null;
+  studioInterlude = null;
   studioToggle = null;
   studioRefresh = null;
   studioSeek = null;
