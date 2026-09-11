@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="여기 있어 노래방">
+  <rect width="64" height="64" rx="14" fill="#151033"/>
+  <!-- 차오르는 가사 줄: 이 앱의 핵심 동작을 16px에서도 읽히게 단순화했다 -->
+  <rect x="10" y="43" width="44" height="6" rx="3" fill="#3B3560"/>
+  <rect x="10" y="43" width="26" height="6" rx="3" fill="#F5C842"/>
+  <!-- 음표 -->
+  <path d="M27 14.5 46 11v20.5a6.2 6.2 0 1 1-4-5.8V18l-11 2v15.2a6.2 6.2 0 1 1-4-5.8z" fill="#F5C842"/>
+</svg>

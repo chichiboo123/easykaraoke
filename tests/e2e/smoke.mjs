@@ -205,6 +205,109 @@ test('빈 구간에 간주를 넣으면 블록 목록에 간주 카드가 생긴
   assert.equal(await page.locator('.block-card.is-interlude .block-text').first().inputValue(), '간주중');
 });
 
+test('전주 화면에 곡 정보 카드가 실제로 그려진다', async () => {
+  // 첫 가사가 카운트다운 길이(4초)만큼만 뒤에 있는, 아주 흔한 곡을 재현한다.
+  // 예전에는 이 경우 카드가 뜰 시간이 없어 곡 정보가 통째로 사라졌다.
+  const diff = await page.evaluate(async () => {
+    const { newProject } = await import('./types.js');
+    const { parseLyrics, distribute } = await import('./lib/lyrics.js');
+    const { renderFrame } = await import('./lib/renderer.js');
+
+    const make = (withMeta) => {
+      const p = newProject('웃고 있지만');
+      if (withMeta) Object.assign(p.meta, { artist: 'SG워너비', lyricist: '안영민', composer: '조영수', musical: '우리들의 봄' });
+      p.blocks = parseLyrics('첫 줄이야', p.roles).blocks;
+      p.blocks[0].start = 4; p.blocks[0].end = 7;
+      distribute(p.blocks[0]);
+      p.media.duration = 60;
+      return p;
+    };
+    const shot = (p) => {
+      const c = document.createElement('canvas');
+      c.width = 480; c.height = 270;
+      const ctx = c.getContext('2d');
+      ctx.setTransform(480 / 1920, 0, 0, 270 / 1080, 0, 0);
+      renderFrame(ctx, p, 1.5, undefined); // 전주 한가운데
+      return ctx.getImageData(0, 0, 480, 270).data;
+    };
+
+    const withMeta = shot(make(true));
+    const without = shot(make(false));
+    let changed = 0;
+    for (let i = 0; i < withMeta.length; i += 4) {
+      if (Math.abs(withMeta[i] - without[i]) > 10) changed++;
+    }
+    return changed;
+  });
+  // 카드가 그려지면 제목·가수·작사·작곡만큼 픽셀이 달라진다.
+  assert.ok(diff > 400, `전주 화면에 곡 정보가 그려지지 않았다 (다른 픽셀 ${diff}개)`);
+});
+
+test('타임라인을 확대·축소하고 좌우로 이동할 수 있다', async () => {
+  const span = () => page.locator('.zoom-out').innerText();
+  const before = await span();
+  await page.locator('.btn[aria-label="확대"]').click();
+  await page.waitForTimeout(200);
+  assert.notEqual(await span(), before, '확대해도 보이는 길이가 그대로다');
+
+  await page.getByRole('button', { name: '전체 보기' }).click();
+  await page.waitForTimeout(250);
+  assert.equal(await page.locator('.timeline-scroll').isEnabled(), false, '전체가 보이면 스크롤이 필요 없다');
+
+  for (let i = 0; i < 3; i++) await page.locator('.btn[aria-label="확대"]').click();
+  await page.waitForTimeout(250);
+  const bar = page.locator('.timeline-scroll');
+  assert.equal(await bar.isEnabled(), true, '확대했으면 좌우로 이동할 수 있어야 한다');
+  await bar.fill('800');
+  await page.waitForTimeout(250);
+  assert.equal(await bar.inputValue(), '800', '스크롤 위치가 유지되지 않는다');
+});
+
+test('글자 단위 편집 모드에서 줄 안의 글자 간격을 조정할 수 있다', async () => {
+  await page.locator('.block-card').first().click();
+  await page.locator('#fine-mode').check();
+  await page.waitForTimeout(300);
+
+  const chips = page.locator('.fine-chip');
+  assert.ok((await chips.count()) > 1, '글자 칩이 보이지 않는다');
+
+  const block = await page.evaluate(async () => {
+    const { state } = await import('./lib/store.js');
+    const b = state.project.blocks[0];
+    return { start: b.start, end: b.end, first: b.segments[0].end - b.segments[0].start };
+  });
+
+  // 재생 중 Space 한 번 = 다음 글자의 시작을 지금 위치로
+  await page.evaluate(async (t) => {
+    const { audio } = await import('./lib/audio.js');
+    audio.currentTime = t;
+    await audio.play();
+  }, block.start + 0.5);
+  await page.locator('.side-head h2').click();
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(400);
+
+  const after = await page.evaluate(async () => {
+    const { state } = await import('./lib/store.js');
+    const b = state.project.blocks[0];
+    return {
+      start: b.start,
+      end: b.end,
+      first: b.segments[0].end - b.segments[0].start,
+      contiguous: b.segments.every((s, i) => i === 0 || Math.abs(s.start - b.segments[i - 1].end) < 1e-6),
+    };
+  });
+  assert.notEqual(after.first.toFixed(3), block.first.toFixed(3), '글자 길이가 바뀌지 않았다');
+  // 핵심: 줄 단위로 잡아 둔 박자는 그대로여야 한다
+  assert.equal(after.start, block.start, '줄 시작이 바뀌었다');
+  assert.equal(after.end, block.end, '줄 끝이 바뀌었다');
+  assert.equal(after.contiguous, true, '글자 사이에 틈이 생겼다');
+
+  await page.evaluate(async () => { const { audio } = await import('./lib/audio.js'); audio.pause(); });
+  await page.locator('#fine-mode').uncheck();
+  await page.waitForTimeout(200);
+});
+
 test('편집 화면은 페이지가 스크롤되지 않는다 (미리보기가 아래 내용을 가리는 것 방지)', async () => {
   const scrolls = await page.evaluate(() => {
     window.scrollTo(0, 5000);

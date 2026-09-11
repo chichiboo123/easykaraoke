@@ -8,9 +8,9 @@ export const newProject = (title) => ({
     roles: [{ id: 'all', name: '전체', color: '#ffd43b' }],
     blocks: [],
     style: { preset: 'classic', fontFamily: 'TJ Joy', colorMode: 'common', progress: true, brightness: 100, darken: 30, blur: 0 },
-    timing: { offset: 0, cursor: 0, rate: 1, volume: 1 },
+    timing: { offset: 0, cursor: 0, rate: 1, volume: 1, mode: 'line' },
     intro: { countdown: true, seconds: 4 },
-    view: { zoom: 1, loopA: 0, loopB: 0, loopOn: false },
+    view: { zoom: 1, loopA: 0, loopB: 0, loopOn: false, from: 0, follow: true },
     media: { name: '', type: '', duration: 0 },
 });
 /**

@@ -2,14 +2,14 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const dist = resolve('dist');
-const required = ['index.html', 'app.js', 'types.js', 'lib/lyrics.js', 'lib/renderer.js', 'styles.css'];
+const required = ['index.html', 'app.js', 'types.js', 'lib/lyrics.js', 'lib/renderer.js', 'styles.css', 'favicon.svg', 'icon-180.png'];
 const missing = required.filter((file) => !existsSync(join(dist, file)) || !statSync(join(dist, file)).isFile());
 if (missing.length) {
   console.error(`배포 산출물 누락: ${missing.join(', ')}`);
   process.exit(1);
 }
 const html = readFileSync(join(dist, 'index.html'), 'utf8');
-for (const asset of ['./styles.css', './app.js']) {
+for (const asset of ['./styles.css', './app.js', './favicon.svg']) {
   if (!html.includes(asset)) throw new Error(`index.html에서 배포 자산을 찾을 수 없음: ${asset}`);
 }
 const app = readFileSync(join(dist, 'app.js'), 'utf8');

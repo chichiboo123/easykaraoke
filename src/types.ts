@@ -48,9 +48,26 @@ export type KaraokeProject = {
   blocks: LyricBlock[];
   style: ProjectStyle;
   /** 입력 지연 보정과 이어찍기 위치. V1에서는 아예 없던 것. */
-  timing: { offset: number; cursor: number; rate: number; volume: number };
+  timing: {
+    offset: number;
+    cursor: number;
+    rate: number;
+    volume: number;
+    /** 'line'은 줄 단위로 찍기, 'syllable'은 줄 안에서 글자 단위로 다듬기. */
+    mode?: 'line' | 'syllable';
+    /** 글자 단위 편집에서 지금 다듬는 줄. */
+    fineBlock?: string;
+  };
   intro: { countdown: boolean; seconds: number };
-  view: { zoom: number; loopA: number; loopB: number; loopOn: boolean };
+  view: {
+    zoom: number;
+    loopA: number;
+    loopB: number;
+    loopOn: boolean;
+    /** 타임라인 창의 시작 시각. follow가 켜져 있으면 재생 위치를 따라간다. */
+    from: number;
+    follow: boolean;
+  };
   media: { name: string; type: string; duration: number };
 };
 
@@ -65,9 +82,9 @@ export const newProject = (title: string): KaraokeProject => ({
   roles: [{ id: 'all', name: '전체', color: '#ffd43b' }],
   blocks: [],
   style: { preset: 'classic', fontFamily: 'TJ Joy', colorMode: 'common', progress: true, brightness: 100, darken: 30, blur: 0 },
-  timing: { offset: 0, cursor: 0, rate: 1, volume: 1 },
+  timing: { offset: 0, cursor: 0, rate: 1, volume: 1, mode: 'line' },
   intro: { countdown: true, seconds: 4 },
-  view: { zoom: 1, loopA: 0, loopB: 0, loopOn: false },
+  view: { zoom: 1, loopA: 0, loopB: 0, loopOn: false, from: 0, follow: true },
   media: { name: '', type: '', duration: 0 },
 });
 
