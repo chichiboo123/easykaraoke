@@ -364,6 +364,40 @@ html.no-icons .btn-iconly::after { content: attr(data-fallback); font-size: var(
 .timeline-canvas { display: block; width: 100%; touch-action: none; }
 
 .tuning { display: flex; flex-wrap: wrap; gap: var(--s4); align-items: center; }
+.zoom-group { display: flex; align-items: center; gap: 2px; }
+.zoom-group .btn { min-height: 32px; padding: 3px 8px; }
+.zoom-out { font-size: var(--t-caption); color: var(--muted); min-width: 66px; text-align: center; font-variant-numeric: tabular-nums; }
+.timeline-scroll { width: 100%; accent-color: var(--accent); }
+.timeline-scroll:disabled { opacity: .4; }
+
+/* 글자 단위 편집 — 줄 단위 찍기와 헷갈리지 않게 강조색 테두리로 구분한다. */
+.fine-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s4);
+  padding: var(--s2) var(--s4); border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--surface); cursor: pointer;
+}
+.fine-toggle span { display: flex; flex-direction: column; }
+.fine-toggle small { color: var(--muted); font-size: var(--t-caption); }
+.fine-toggle input { width: 44px; height: 24px; accent-color: var(--accent); flex: none; cursor: pointer; }
+
+.fine-strip {
+  display: flex; flex-direction: column; gap: var(--s2);
+  padding: var(--s3) var(--s4); border: 1px solid var(--accent); border-radius: var(--r-md);
+  background: var(--accent-soft);
+}
+.fine-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.fine-head small { color: var(--muted); font-variant-numeric: tabular-nums; }
+.fine-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.fine-chip {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  min-width: 46px; padding: 5px 7px; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm);
+  color: var(--ink); font: inherit;
+}
+.fine-chip b { font-size: 17px; }
+.fine-chip small { font-size: 10px; color: var(--subtle); font-variant-numeric: tabular-nums; }
+.fine-chip.is-set { border-color: var(--color-success); }
+.fine-chip.is-next { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); font-weight: 700; }
 .tuning-item { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-small); color: var(--muted); }
 .offset-out { font-variant-numeric: tabular-nums; min-width: 58px; text-align: right; color: var(--ink); font-weight: 600; }
 

@@ -1,11 +1,11 @@
 import { audio, computePeaks, resume, setRate, setVolume } from '../audio.js';
 import { ensureGlyphs, textForProject } from '../fonts.js';
 import { blockAt, nextUntimed } from '../frame.js';
-import { distribute, isLyric, lyricCount, makeInterlude, retext, segmentKorean, timedCount } from '../lyrics.js';
+import { distribute, isLyric, lyricCount, makeInterlude, normalizeSegments, retext, segmentKorean, setSyllableStart, timedCount } from '../lyrics.js';
 import { renderFrame } from '../renderer.js';
 import { canRedo, canUndo, commit, project, redo, state, touch, undo } from '../store.js';
 import { uid } from '../../types.js';
-import { TIMELINE_H, draw as drawTimeline, hitTest, windowFor, type ViewWindow } from '../timeline.js';
+import { TIMELINE_H, clampFrom, draw as drawTimeline, hitTest, spanFor, windowFor, type ViewWindow } from '../timeline.js';
 import { button, clock, confirmDialog, el, icon, previewCanvas, sizeCanvas, toast } from './shell.js';
 
 const MIN_BLOCK = 0.2;
@@ -37,7 +37,7 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
   const cueQueue = el('div', { class: 'cue-queue' });
   const clockOut = el('output', { class: 'transport-clock' });
   const playBtn = button({ kind: 'primary', icon: 'play_arrow', title: '재생 / 정지 (K)', fallback: '▶', onClick: togglePlay });
-  const stampBtn = button({ kind: 'primary', icon: 'ads_click', label: 'Space · 여기서 시작', onClick: stamp });
+  const stampBtn = button({ kind: 'primary', icon: 'ads_click', label: 'Space · 여기서 시작', onClick: () => studioStamp?.() });
   const undoBtn = button({ kind: 'ghost', icon: 'undo', title: '되돌리기 (Ctrl+Z)', fallback: '↶', onClick: () => (undo() ? refreshAll() : toast('되돌릴 것이 없어요.')) });
   const redoBtn = button({ kind: 'ghost', icon: 'redo', title: '다시 실행 (Ctrl+Shift+Z)', fallback: '↷', onClick: () => (redo() ? refreshAll() : toast('다시 실행할 것이 없어요.')) });
   const cards = el('div', { class: 'block-list' });
@@ -85,12 +85,68 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
     });
   };
 
-  const zoom = el('input', { type: 'range', min: '0.25', max: '4', step: '0.05', value: String(p.view.zoom), class: 'slider' });
-  zoom.setAttribute('aria-label', '타임라인 확대');
-  zoom.oninput = () =>
+  // ── 타임라인 보기 조작 ────────────────────────────
+  const zoomOut = button({ kind: 'ghost', icon: 'zoom_out', title: '축소', fallback: '−', onClick: () => nudgeZoom(1 / 1.6) });
+  const zoomIn = button({ kind: 'ghost', icon: 'zoom_in', title: '확대', fallback: '＋', onClick: () => nudgeZoom(1.6) });
+  const zoomOut2 = el('output', { class: 'zoom-out' });
+  const fitBtn = button({ kind: 'ghost', icon: 'fit_screen', label: '전체 보기', onClick: () => fitAll() });
+  const followBtn = button({ kind: 'ghost', icon: 'my_location', label: '재생 위치로', onClick: () => followNow() });
+  const scroll = el('input', { type: 'range', min: '0', max: '1000', step: '1', value: '0', class: 'slider timeline-scroll' });
+  scroll.setAttribute('aria-label', '타임라인 가로 이동');
+  scroll.oninput = () => {
+    const cur = project();
+    const width = timeline.clientWidth || 800;
+    const max = Math.max(0, cur.media.duration - spanFor(cur, width));
     touch(() => {
-      project().view.zoom = Number(zoom.value);
+      cur.view.follow = false;
+      cur.view.from = (Number(scroll.value) / 1000) * max;
     });
+    syncView();
+  };
+
+  /** 화면 가운데 시각을 유지한 채 배율만 바꾼다. 보던 자리를 잃지 않게. */
+  function nudgeZoom(factor: number) {
+    const cur = project();
+    const width = timeline.clientWidth || 800;
+    const center = cur.view.follow ? audio.currentTime : cur.view.from + spanFor(cur, width) / 2;
+    touch(() => {
+      cur.view.zoom = Math.min(8, Math.max(0.05, cur.view.zoom * factor));
+      if (!cur.view.follow) cur.view.from = clampFrom(cur, center - spanFor(cur, width) / 2, width);
+    });
+    syncView();
+  }
+
+  /** 곡 전체가 한 화면에 들어오도록 맞춘다. */
+  function fitAll() {
+    const cur = project();
+    const width = timeline.clientWidth || 800;
+    touch(() => {
+      cur.view.zoom = Math.max(0.02, width / (100 * Math.max(1, cur.media.duration)));
+      cur.view.follow = false;
+      cur.view.from = 0;
+    });
+    syncView();
+    toast('곡 전체를 한 화면에 담았어요.');
+  }
+
+  function followNow() {
+    touch(() => {
+      project().view.follow = true;
+    });
+    syncView();
+  }
+
+  /** 확대 배율·스크롤 위치 표시를 현재 상태에 맞춘다. */
+  function syncView() {
+    const cur = project();
+    const width = timeline.clientWidth || 800;
+    const span = spanFor(cur, width);
+    zoomOut2.textContent = `${span < 60 ? `${span.toFixed(1)}초` : `${Math.round(span / 60)}분`} 보임`;
+    const max = Math.max(0, cur.media.duration - span);
+    scroll.disabled = max <= 0;
+    scroll.value = String(max > 0 ? Math.round((cur.view.from / max) * 1000) : 0);
+    followBtn.classList.toggle('is-on', cur.view.follow);
+  }
 
   const loopToggle = button({
     kind: 'ghost',
@@ -122,7 +178,7 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
 
   const tuning = el('div', { class: 'tuning' }, [
     el('label', { class: 'tuning-item' }, [el('span', { textContent: '타이밍 밀기' }), offset, offsetOut]),
-    el('label', { class: 'tuning-item' }, [el('span', { textContent: '확대' }), zoom]),
+    el('div', { class: 'tuning-item zoom-group' }, [zoomOut, zoomOut2, zoomIn, fitBtn, followBtn]),
     button({
       kind: 'ghost',
       icon: 'skip_next',
@@ -138,6 +194,40 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
   ]);
 
   // ── 찍기 패널 ────────────────────────────────────────
+  // ── 글자 단위 편집 ────────────────────────────────
+  // 줄 단위로 찍은 뒤, 그 줄 안에서 색이 차는 속도를 글자마다 손보는 모드.
+  const modeToggle = el('input', { type: 'checkbox', id: 'fine-mode', checked: p.timing.mode === 'syllable' });
+  modeToggle.setAttribute('role', 'switch');
+  modeToggle.onchange = () => {
+    const cur = project();
+    touch(() => {
+      cur.timing.mode = modeToggle.checked ? 'syllable' : 'line';
+      if (modeToggle.checked) {
+        // 간주나 아직 안 찍은 줄은 다듬을 게 없다. 음절이 있는 줄로 옮겨 준다.
+        const usable = (i: number) => {
+          const b = cur.blocks[i];
+          return !!b && isLyric(b) && b.segments.length > 0 && b.end > b.start;
+        };
+        if (!usable(state.selected)) state.selected = cur.blocks.findIndex((_, i) => usable(i));
+        cur.timing.fineBlock = cur.blocks[state.selected]?.id;
+      } else {
+        cur.timing.fineBlock = undefined;
+      }
+      fineIndex = 1;
+    });
+    refreshAll();
+    toast(
+      modeToggle.checked
+        ? '글자 단위 편집을 켰어요. 줄을 고르고 재생하면서 글자마다 Space를 누르세요.'
+        : '줄 단위 찍기로 돌아왔어요.',
+    );
+  };
+  const modeRow = el('label', { class: 'fine-toggle' }, [
+    el('span', {}, [el('b', { textContent: '글자 단위 편집' }), el('small', { textContent: '줄 안에서 색 차는 속도를 글자마다 맞춰요' })]),
+    modeToggle,
+  ]);
+  const fineStrip = el('div', { class: 'fine-strip' });
+
   const cuePanel = el('div', { class: 'cue' }, [
     el('div', { class: 'cue-body' }, [el('small', { textContent: '지금 찍을 줄' }), cueText, cueQueue]),
     el('div', { class: 'cue-actions' }, [
@@ -169,7 +259,7 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
   // 아래 전체 폭에 타임라인. 페이지가 스크롤되지 않으므로 무엇도 다른 것을 가리지 않는다.
   root.className = 'editor-shell editor-shell-studio';
   root.append(
-    el('div', { class: 'editor-stage' }, [el('div', { class: 'stage' }, [preview]), transport, cuePanel]),
+    el('div', { class: 'editor-stage' }, [el('div', { class: 'stage' }, [preview]), transport, cuePanel, modeRow, fineStrip]),
     el('div', { class: 'editor-side' }, [
       el('div', { class: 'side-head' }, [
         el('h2', { textContent: '가사 블록' }),
@@ -185,7 +275,7 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
         button({ kind: 'primary', icon: 'palette', label: '꾸미고 저장하기', onClick: () => go(3) }),
       ]),
     ]),
-    el('div', { class: 'editor-bottom' }, [tuning, el('div', { class: 'timeline-wrap' }, [timeline])]),
+    el('div', { class: 'editor-bottom' }, [tuning, el('div', { class: 'timeline-wrap' }, [timeline]), scroll]),
   );
 
   // ── 동작 ──────────────────────────────────────────────
@@ -202,7 +292,13 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
     if (mi) mi.textContent = audio.paused ? 'play_arrow' : 'pause';
     playBtn.title = audio.paused ? '재생 (K)' : '정지 (K)';
     const stampLabel = stampBtn.querySelector('span:not(.mi)');
-    if (stampLabel) stampLabel.textContent = audio.paused ? 'Space · 노래 시작' : 'Space · 여기서 시작';
+    if (stampLabel) {
+      stampLabel.textContent = audio.paused
+        ? 'Space · 노래 시작'
+        : project().timing.mode === 'syllable'
+          ? 'Space · 이 글자부터'
+          : 'Space · 여기서 시작';
+    }
   }
 
   function seek(t: number) {
@@ -211,6 +307,12 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
 
   function select(index: number) {
     state.selected = index;
+    const cur = project();
+    if (cur.timing.mode === 'syllable' && isLyric(cur.blocks[index])) {
+      cur.timing.fineBlock = cur.blocks[index].id;
+      fineIndex = 1;
+      renderFine();
+    }
     renderCards();
   }
 
@@ -259,15 +361,105 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
     refreshAll();
   }
 
+  /** 글자 단위 편집에서 다음에 맞출 음절 번호(0번은 줄 시작이라 1부터). */
+  let fineIndex = 1;
+
+  function fineBlockIndex(): number {
+    const cur = project();
+    const ok = (b?: (typeof cur.blocks)[number]) => !!b && isLyric(b) && b.segments.length > 0;
+    const byId = cur.blocks.findIndex((b) => b.id === cur.timing.fineBlock);
+    if (byId >= 0 && ok(cur.blocks[byId])) return byId;
+    if (ok(cur.blocks[state.selected])) return state.selected;
+    return -1;
+  }
+
+  /**
+   * 글자 하나의 시작 시각을 지금 재생 위치로 맞춘다.
+   * 줄 전체 구간은 건드리지 않고 그 안에서 경계만 옮기므로,
+   * 줄 단위로 잡아 둔 박자가 흐트러지지 않는다.
+   */
+  function fineStamp(eventTime?: number) {
+    const cur = project();
+    const bi = fineBlockIndex();
+    const block = cur.blocks[bi];
+    if (!block || !block.segments.length) {
+      toast('먼저 다듬을 줄을 고르세요.');
+      return;
+    }
+    if (audio.paused) {
+      togglePlay();
+      toast('재생을 시작했어요. 글자가 넘어가는 순간마다 Space를 누르세요.');
+      return;
+    }
+    if (fineIndex >= block.segments.length) {
+      toast('이 줄은 끝까지 맞췄어요. 다음 줄을 고르세요.', 'success');
+      return;
+    }
+    const lag = eventTime !== undefined ? Math.max(0, (performance.now() - eventTime) / 1000) : 0;
+    const now = Math.max(0, audio.currentTime - lag) + cur.timing.offset;
+    commit('fine-stamp', () => {
+      setSyllableStart(block, fineIndex, now);
+      fineIndex++;
+    });
+    renderFine();
+  }
+
+  /** 지금 다듬는 줄의 글자들을 띠로 보여 준다. 어디까지 맞췄는지 한눈에. */
+  function renderFine() {
+    const cur = project();
+    if (cur.timing.mode !== 'syllable') {
+      fineStrip.hidden = true;
+      fineStrip.replaceChildren();
+      return;
+    }
+    fineStrip.hidden = false;
+    const bi = fineBlockIndex();
+    const block = cur.blocks[bi];
+    if (!block) {
+      fineStrip.replaceChildren(el('p', { class: 'hint', textContent: '다듬을 줄을 목록에서 골라 주세요.' }));
+      return;
+    }
+    const head = el('div', { class: 'fine-head' }, [
+      el('small', { textContent: `${bi + 1}번 줄 · ${clock(block.start)} – ${clock(block.end)}` }),
+      button({
+        kind: 'ghost',
+        icon: 'restart_alt',
+        label: '이 줄 균등하게',
+        onClick: () => {
+          commit('fine-reset', () => distribute(block));
+          fineIndex = 1;
+          renderFine();
+          toast('글자 간격을 균등하게 되돌렸어요.');
+        },
+      }),
+    ]);
+    const chips = el('div', { class: 'fine-chips' });
+    block.segments.forEach((seg, i) => {
+      const chip = el('button', {
+        class: `fine-chip${i === fineIndex ? ' is-next' : ''}${i < fineIndex ? ' is-set' : ''}`,
+        type: 'button',
+        title: `${clock(seg.start)} – ${clock(seg.end)}`,
+      }, [el('b', { textContent: seg.text }), el('small', { textContent: `${(seg.end - seg.start).toFixed(2)}초` })]);
+      chip.onclick = () => {
+        fineIndex = Math.max(1, i);
+        seek(Math.max(0, block.segments[Math.max(0, i - 1)].start - 0.2));
+        renderFine();
+      };
+      chips.append(chip);
+    });
+    fineStrip.replaceChildren(head, chips);
+  }
+
   function refreshAll() {
     const cur = project();
-    zoom.value = String(cur.view.zoom);
     offset.value = String(cur.timing.offset);
     offsetOut.textContent = fmtOffset(cur.timing.offset);
     volume.value = String(cur.timing.volume);
     loopToggle.classList.toggle('is-on', cur.view.loopOn);
     syncRates();
+    syncView();
     renderCue();
+    renderFine();
     renderCards();
   }
 
@@ -287,9 +479,8 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
     cueQueue.replaceChildren(
       ...cur.blocks.slice(i + 1).filter(isLyric).slice(0, 3).map((b) => el('span', { textContent: b.text })),
     );
-    stampBtn.disabled = !block;
-    const stampLabel = stampBtn.querySelector('span:not(.mi)');
-    if (stampLabel) stampLabel.textContent = audio.paused ? 'Space · 노래 시작' : 'Space · 여기서 시작';
+    stampBtn.disabled = cur.timing.mode === 'syllable' ? false : !block;
+    syncPlayIcon();
     const timed = timedCount(cur.blocks);
     const total = lyricCount(cur.blocks);
     progressPill.replaceChildren(el('b', { textContent: `${timed}` }), el('span', { textContent: ` / ${total}줄` }));
@@ -472,6 +663,14 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
       actions.prepend(sel);
     }
 
+    // 안내 문구가 "카드를 누르면 이동"이라고 말하므로 카드 전체가 눌려야 한다.
+    // 가사 입력란과 조작 버튼은 각자 할 일이 있으니 건너뛴다.
+    card.onclick = (e) => {
+      if ((e.target as HTMLElement).closest('.block-text, .block-actions, .block-time, .block-role')) return;
+      select(i);
+      if (b.end > b.start) seek(b.start - 0.3);
+    };
+
     card.append(num, time, text, actions);
     return card;
   }
@@ -479,9 +678,18 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
   // ── 타임라인 조작: 클릭 시크 · 드래그 길이 조절 ───────────
   let drag: { index: number; edge: 'start' | 'end' | 'move'; grab: number } | null = null;
 
+  let pan: { x: number; from: number } | null = null;
+
   timeline.addEventListener('pointerdown', (e) => {
     const hit = hitTest(timeline, project(), win, e.clientX, e.clientY);
     if (hit.kind === 'seek') {
+      // Shift를 누른 채 끌면 이동(패닝), 그냥 누르면 그 시각으로 점프.
+      if (e.shiftKey) {
+        pan = { x: e.clientX, from: win.from };
+        timeline.setPointerCapture(e.pointerId);
+        timeline.style.cursor = 'grabbing';
+        return;
+      }
       seek(hit.time);
       return;
     }
@@ -492,6 +700,17 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
   });
 
   timeline.addEventListener('pointermove', (e) => {
+    if (pan) {
+      const cur = project();
+      const width = timeline.clientWidth || 800;
+      const moveBy = ((pan.x - e.clientX) / width) * spanFor(cur, width);
+      touch(() => {
+        cur.view.follow = false;
+        cur.view.from = clampFrom(cur, pan!.from + moveBy, width);
+      });
+      syncView();
+      return;
+    }
     if (!drag) {
       const hit = hitTest(timeline, project(), win, e.clientX, e.clientY);
       timeline.style.cursor = hit.kind === 'seek' ? 'pointer' : hit.edge === 'move' ? 'grab' : 'ew-resize';
@@ -516,8 +735,35 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
 
   const endDrag = () => {
     drag = null;
+    pan = null;
     timeline.style.cursor = '';
   };
+
+  // 휠로 좌우 이동, Ctrl(⌘)+휠로 확대. 지도나 편집기에서 익숙한 조작.
+  timeline.addEventListener(
+    'wheel',
+    (e) => {
+      e.preventDefault();
+      const cur = project();
+      const width = timeline.clientWidth || 800;
+      if (e.ctrlKey || e.metaKey) {
+        nudgeZoom(e.deltaY < 0 ? 1.2 : 1 / 1.2);
+        return;
+      }
+      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      const moveBy = (delta / width) * spanFor(cur, width);
+      touch(() => {
+        // 손으로 움직이는 순간 재생 위치 따라가기를 놓는다.
+        if (cur.view.follow) {
+          cur.view.from = win.from;
+          cur.view.follow = false;
+        }
+        cur.view.from = clampFrom(cur, cur.view.from + moveBy, width);
+      });
+      syncView();
+    },
+    { passive: false },
+  );
   timeline.addEventListener('pointerup', endDrag);
   timeline.addEventListener('pointercancel', endDrag);
 
@@ -546,7 +792,7 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
   };
 
   // 스탬프 단축키는 app.ts의 전역 핸들러가 이 함수를 부른다.
-  studioStamp = stamp;
+  studioStamp = (eventTime?: number) => (project().timing.mode === 'syllable' ? fineStamp(eventTime) : stamp(eventTime));
   studioToggle = togglePlay;
   studioRefresh = refreshAll;
   studioSeek = seek;

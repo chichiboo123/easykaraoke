@@ -20,5 +20,9 @@ cpSync(join(dist, 'types.js'), join(root, 'types.js'));
 cpSync(join(dist, 'lib'), join(root, 'lib'), { recursive: true });
 cpSync(join(dist, 'styles.css'), join(root, 'styles.css'));
 cpSync(join(dist, 'fonts'), join(root, 'fonts'), { recursive: true });
+// 파비콘도 루트로. index.html이 ./favicon.svg 를 가리키므로 루트 배포에서도 있어야 한다.
+for (const icon of ['favicon.svg', 'icon-180.png', 'icon-512.png']) {
+  cpSync(join(dist, icon), join(root, icon));
+}
 cpSync(join(root, '.nojekyll'), join(dist, '.nojekyll'));
 execFileSync(process.execPath, [join(root, 'scripts', 'check-deploy.mjs')], { stdio: 'inherit', cwd: root });

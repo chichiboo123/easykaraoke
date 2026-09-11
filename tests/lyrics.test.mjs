@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 // V1 테스트는 구현을 import하지 않고 복사해 둬서, 실제 코드가 깨져도 통과했다.
 // V2는 컴파일된 실제 모듈을 그대로 검사한다.
-import { parseLyrics, segmentKorean, mergeBlocks, distribute, makeInterlude, lyricCount, timedCount } from '../lib/lyrics.js';
-import { segmentProgress, blockAt } from '../lib/frame.js';
+import { parseLyrics, segmentKorean, mergeBlocks, distribute, makeInterlude, lyricCount, timedCount, setSyllableStart } from '../lib/lyrics.js';
+import { segmentProgress, blockAt, firstCue } from '../lib/frame.js';
 import { newProject, migrate } from '../types.js';
 
 const roles = [{ id: 'all', name: '전체', color: '#ffd43b' }];
@@ -132,4 +132,45 @@ test('가사를 다시 적용해도 간주 블록이 살아남는다', () => {
   assert.ok(gap, '간주가 사라졌다');
   assert.equal(gap.start, 2);
   assert.equal(merged.blocks.indexOf(gap), 1, '간주가 시간 순서대로 들어가야 한다');
+});
+
+test('글자 단위 편집은 줄 구간을 건드리지 않고 안에서만 경계를 옮긴다', () => {
+  const block = { id: 'b', text: '사랑해', roleId: 'all', start: 10, end: 13, segments: segmentKorean('사랑해') };
+  distribute(block);
+  setSyllableStart(block, 1, 11.5);
+  assert.equal(block.segments[0].end, 11.5);
+  assert.equal(block.segments[1].start, 11.5, '앞 글자의 끝과 뒤 글자의 시작이 맞물려야 한다');
+  // 줄 전체 구간은 그대로여야 한다. 줄 단위로 잡아 둔 박자가 흐트러지면 안 된다.
+  assert.equal(block.segments[0].start, 10);
+  assert.equal(block.segments.at(-1).end, 13);
+  // 음절 사이에 틈이 없어야 한다
+  for (let i = 1; i < block.segments.length; i++) {
+    assert.equal(block.segments[i].start, block.segments[i - 1].end);
+  }
+});
+
+test('글자 경계는 앞뒤 글자를 밀어내지 않도록 최소 길이를 지킨다', () => {
+  const block = { id: 'b', text: '사랑해', roleId: 'all', start: 0, end: 3, segments: segmentKorean('사랑해') };
+  distribute(block);
+  setSyllableStart(block, 1, -99); // 터무니없이 이른 시각
+  assert.ok(block.segments[0].end - block.segments[0].start >= 0.05, '앞 글자가 사라지면 안 된다');
+  setSyllableStart(block, 1, 999); // 터무니없이 늦은 시각
+  assert.ok(block.segments[1].end - block.segments[1].start >= 0.05, '뒤 글자가 사라지면 안 된다');
+});
+
+test('첫 가사가 카운트다운 길이만큼만 뒤에 있어도 전주 구간으로 인식한다', () => {
+  // 회귀 방지: 카드 표시 조건이 "남은 시간 > 카운트다운 초"였을 때는
+  // 첫 가사가 4초에 시작하는 곡(흔하다)에서 곡 정보 카드가 아예 뜨지 않았다.
+  const p = newProject('t');
+  p.intro = { countdown: true, seconds: 4 };
+  p.blocks = parseLyrics('첫 줄\n둘째 줄', roles).blocks;
+  p.blocks[0].start = 4; p.blocks[0].end = 6;
+  p.blocks[1].start = 6; p.blocks[1].end = 8;
+
+  assert.equal(firstCue(p), 4);
+  // 전주 내내 어떤 가사 블록도 잡히지 않아야 인트로 화면이 그려진다.
+  for (const t of [0, 1, 2, 3, 3.9]) {
+    assert.equal(blockAt(p, t).block, undefined, `${t}초는 전주 구간이어야 한다`);
+  }
+  assert.equal(blockAt(p, 4.1).block?.text, '첫 줄');
 });

@@ -204,9 +204,10 @@ export function renderFrame(ctx: CanvasRenderingContext2D, p: KaraokeProject, ra
 function drawIntro(ctx: CanvasRenderingContext2D, p: KaraokeProject, time: number, first: number, family: string, point: string) {
   ctx.textAlign = 'center';
   const remain = first - time;
-  const showCard = remain > p.intro.seconds || !p.intro.countdown;
-
-  if (showCard) {
+  // 곡 정보 카드는 전주 내내 보여 준다.
+  // 예전에는 "남은 시간 > 카운트다운 초"일 때만 띄웠는데, 첫 가사가 4초쯤
+  // 시작하는 곡(흔하다)에서는 카드가 뜰 시간이 아예 없어 그냥 사라져 버렸다.
+  {
     // 실제 노래방 시작 화면 배치. 제목은 가운데 위쪽, 만든 사람들은 좌측 하단.
     if (p.meta.musical) {
       ctx.font = font(46, family);
@@ -243,15 +244,15 @@ function drawIntro(ctx: CanvasRenderingContext2D, p: KaraokeProject, time: numbe
   }
 
   if (p.intro.countdown && remain > 0 && remain <= p.intro.seconds) {
+    // 카드와 겹치지 않도록 제목 아래, 좌측 하단 정보 위쪽에 둔다.
     const n = Math.ceil(remain);
     const phase = 1 - (remain - Math.floor(remain));
     ctx.save();
-    ctx.globalAlpha = Math.max(0.25, 1 - phase * 0.55);
-    ctx.font = font(240, family);
-    outlined(ctx, String(n), W / 2, 540, 22, point);
+    ctx.textAlign = 'center';
+    ctx.globalAlpha = Math.max(0.3, 1 - phase * 0.5);
+    ctx.font = font(170, family);
+    outlined(ctx, String(n), W / 2, 720, 18, point);
     ctx.restore();
-    ctx.font = font(46, family);
-    outlined(ctx, '곧 시작해요', W / 2, 760, 10, 'rgba(255,255,255,.9)');
   }
 }
 
