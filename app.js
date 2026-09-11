@@ -4,7 +4,7 @@ import { lyricCount, timedCount } from './lib/lyrics.js';
 import { adopt, create, hydrateFiles, onSaveState, project, resetSession, save, saveState, setBackground, state, undo, redo, notify } from './lib/store.js';
 import { loadProjects, removeProject } from './lib/storage.js';
 import { acceptAudio, prepareScreen } from './lib/ui/prepare.js';
-import { clearStudioHooks, nudgeSelected, studioScreen, studioStamp, studioToggle, stopStudio } from './lib/ui/studio.js';
+import { clearStudioHooks, nudgeSelected, studioDelete, studioInterlude, studioScreen, studioStamp, studioToggle, stopStudio } from './lib/ui/studio.js';
 import { finishScreen, stopFinish } from './lib/ui/finish.js';
 import { decodeBlob, parsePackage, savePackage } from './lib/package.js';
 import { startHero, stopHero } from './lib/ui/hero.js';
@@ -344,6 +344,16 @@ window.addEventListener('keydown', (e) => {
     if (e.code === 'Space') {
         e.preventDefault();
         studioStamp?.(e.timeStamp);
+    }
+    else if (e.key === 'Delete') {
+        // 타임라인이나 목록에서 고른 마디를 바로 지운다.
+        e.preventDefault();
+        studioDelete?.();
+    }
+    else if (e.key.toLowerCase() === 'i') {
+        // 지금 재생 위치의 빈 구간을 간주로 채운다.
+        e.preventDefault();
+        studioInterlude?.();
     }
     else if (e.key.toLowerCase() === 'k') {
         e.preventDefault();
