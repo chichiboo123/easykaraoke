@@ -385,8 +385,12 @@ html.no-icons .btn-iconly::after { content: attr(data-fallback); font-size: var(
   padding: var(--s3) var(--s4); border: 1px solid var(--accent); border-radius: var(--r-md);
   background: var(--accent-soft);
 }
-.fine-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.fine-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
 .fine-head small { color: var(--muted); font-variant-numeric: tabular-nums; }
+.fine-head small b { color: var(--ink); }
+.fine-tools { display: flex; align-items: center; gap: 2px; }
+.fine-tools .btn { min-height: 30px; padding: 3px 8px; font-size: var(--t-caption); }
+.fine-tip { font-size: var(--t-caption); color: var(--muted); margin: 0; }
 .fine-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .fine-chip {
   display: flex; flex-direction: column; align-items: center; gap: 1px;
@@ -396,6 +400,7 @@ html.no-icons .btn-iconly::after { content: attr(data-fallback); font-size: var(
 }
 .fine-chip b { font-size: 17px; }
 .fine-chip small { font-size: 10px; color: var(--subtle); font-variant-numeric: tabular-nums; }
+.fine-chips { max-height: 132px; overflow-y: auto; }
 .fine-chip.is-set { border-color: var(--color-success); }
 .fine-chip.is-next { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); font-weight: 700; }
 .tuning-item { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-small); color: var(--muted); }
