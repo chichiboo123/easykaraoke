@@ -263,29 +263,73 @@ test('타임라인을 확대·축소하고 좌우로 이동할 수 있다', asyn
   assert.equal(await bar.inputValue(), '800', '스크롤 위치가 유지되지 않는다');
 });
 
-test('글자 단위 편집 모드에서 줄 안의 글자 간격을 조정할 수 있다', async () => {
-  await page.locator('.block-card').first().click();
+test('글자 단위로 처음부터 찍으면 줄 선택 없이 다음 줄로 이어진다', async () => {
+  // 타이밍이 하나도 없는 새 프로젝트에서 글자 단위로만 찍는다.
+  await page.evaluate(async () => {
+    const { state, commit } = await import('./lib/store.js');
+    const { parseLyrics } = await import('./lib/lyrics.js');
+    commit('reset-for-test', () => {
+      const p = state.project;
+      p.blocks = parseLyrics('사랑해\n보고파', p.roles).blocks;
+      p.timing.cursor = 0;
+      p.timing.fineBlock = undefined;
+    });
+  });
+  await page.locator('#fine-mode').uncheck().catch(() => {});
   await page.locator('#fine-mode').check();
   await page.waitForTimeout(300);
 
-  const chips = page.locator('.fine-chip');
-  assert.ok((await chips.count()) > 1, '글자 칩이 보이지 않는다');
+  await page.locator('.side-head h2').click();
+  await page.keyboard.press('Space'); // 재생 시작
+  await page.waitForTimeout(400);
+  // 글자 6개 + 마지막 줄 닫기 1회. 중간에 줄을 고르지 않는다.
+  for (let i = 0; i < 7; i++) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(320);
+  }
+  await page.evaluate(async () => { const { audio } = await import('./lib/audio.js'); audio.pause(); });
+  await page.waitForTimeout(200);
 
-  const block = await page.evaluate(async () => {
+  const blocks = await page.evaluate(async () => {
     const { state } = await import('./lib/store.js');
-    const b = state.project.blocks[0];
-    return { start: b.start, end: b.end, first: b.segments[0].end - b.segments[0].start };
+    return state.project.blocks.map((b) => ({
+      text: b.text,
+      timed: b.end > b.start,
+      // 색이 차는 기준은 줄. 글자들이 줄 구간을 빈틈없이 덮어야 한다.
+      covers: Math.abs(b.segments[0].start - b.start) < 1e-6 && Math.abs(b.segments.at(-1).end - b.end) < 1e-6,
+      contiguous: b.segments.every((s, i) => i === 0 || Math.abs(s.start - b.segments[i - 1].end) < 1e-6),
+      varied: new Set(b.segments.map((s) => (s.end - s.start).toFixed(2))).size >= 1,
+    }));
   });
 
-  // 재생 중 Space 한 번 = 다음 글자의 시작을 지금 위치로
-  await page.evaluate(async (t) => {
-    const { audio } = await import('./lib/audio.js');
-    audio.currentTime = t;
-    await audio.play();
-  }, block.start + 0.5);
-  await page.locator('.side-head h2').click();
-  await page.keyboard.press('Space');
-  await page.waitForTimeout(400);
+  assert.equal(blocks.length, 2);
+  for (const [i, b] of blocks.entries()) {
+    assert.equal(b.timed, true, `${i + 1}번 줄이 찍히지 않았다 — 자동으로 다음 줄로 넘어가지 않는다`);
+    assert.equal(b.covers, true, `${i + 1}번 줄: 글자가 줄 구간을 덮지 않는다`);
+    assert.equal(b.contiguous, true, `${i + 1}번 줄: 글자 사이에 틈이 있다`);
+  }
+});
+
+test('글자 경계를 밀어 색 차는 속도를 다시 찍지 않고 손볼 수 있다', async () => {
+  // 줄 중간을 탭하면 거기서부터 다시 찍히는 것이 정상이다(앞으로 재녹음).
+  // 아무것도 잃지 않고 속도만 손보는 길은 ±10ms 버튼이다. 그 경로를 확인한다.
+  await page.locator('.block-card').first().click();
+  await page.waitForTimeout(200);
+
+  const before = await page.evaluate(async () => {
+    const { state } = await import('./lib/store.js');
+    const b = state.project.blocks[0];
+    return { start: b.start, end: b.end, first: b.segments[0].end - b.segments[0].start, count: b.segments.length };
+  });
+  assert.ok(before.count > 1, '글자가 둘 이상인 줄이어야 한다');
+
+  // 두 번째 글자의 경계를 고른 뒤 뒤로 민다
+  await page.locator('.fine-chip').nth(1).click();
+  await page.waitForTimeout(150);
+  for (let i = 0; i < 3; i++) {
+    await page.locator('.fine-tools .btn[aria-label="이 경계 10ms 뒤로"]').click();
+    await page.waitForTimeout(80);
+  }
 
   const after = await page.evaluate(async () => {
     const { state } = await import('./lib/store.js');
@@ -297,13 +341,13 @@ test('글자 단위 편집 모드에서 줄 안의 글자 간격을 조정할 �
       contiguous: b.segments.every((s, i) => i === 0 || Math.abs(s.start - b.segments[i - 1].end) < 1e-6),
     };
   });
-  assert.notEqual(after.first.toFixed(3), block.first.toFixed(3), '글자 길이가 바뀌지 않았다');
-  // 핵심: 줄 단위로 잡아 둔 박자는 그대로여야 한다
-  assert.equal(after.start, block.start, '줄 시작이 바뀌었다');
-  assert.equal(after.end, block.end, '줄 끝이 바뀌었다');
+
+  assert.ok(after.first > before.first + 0.02, `첫 글자가 길어지지 않았다 (${before.first} → ${after.first})`);
+  // 색이 차는 기준인 줄 구간은 그대로여야 한다
+  assert.equal(after.start, before.start, '줄 시작이 바뀌었다');
+  assert.equal(after.end, before.end, '줄 끝이 바뀌었다');
   assert.equal(after.contiguous, true, '글자 사이에 틈이 생겼다');
 
-  await page.evaluate(async () => { const { audio } = await import('./lib/audio.js'); audio.pause(); });
   await page.locator('#fine-mode').uncheck();
   await page.waitForTimeout(200);
 });
