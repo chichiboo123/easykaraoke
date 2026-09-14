@@ -190,13 +190,134 @@ test('가사 블록을 추가·이동·삭제할 수 있다', async () => {
   assert.notEqual(await cards.nth(0).locator('.block-text').inputValue(), target);
 });
 
+/** 목록이 실제로 스크롤되도록 넉넉한 줄을 만들어 둔다. 짧은 목록에서는 아래 검사가 무의미하다. */
+async function seedLongSong() {
+  await page.evaluate(async () => {
+    const { state, commit } = await import('./lib/store.js');
+    const { parseLyrics, distribute } = await import('./lib/lyrics.js');
+    const { audio } = await import('./lib/audio.js');
+    commit('seed-long', () => {
+      const p = state.project;
+      const lines = Array.from({ length: 16 }, (_, i) => `${i + 1}번째 가사 줄이에요`).join('\n');
+      p.blocks = parseLyrics(lines, p.roles).blocks;
+      p.blocks.forEach((b, i) => {
+        b.start = 0.4 + i * 0.55;
+        b.end = b.start + 0.45;
+        distribute(b);
+      });
+      p.timing.cursor = p.blocks.length;
+      p.timing.mode = 'line';
+      p.view.follow = true;
+      p.view.zoom = 1;
+    });
+    audio.pause();
+    audio.currentTime = 0;
+    state.selected = -1;
+  });
+  // 스토어 변경은 화면을 자동으로 다시 그리지 않는다. 단계를 다시 들어가 새로 그린다.
+  await page.locator('.steps .step', { hasText: '준비' }).click();
+  await page.waitForTimeout(200);
+  await page.locator('.steps .step', { hasText: '타이밍' }).click();
+  await page.waitForTimeout(400);
+  const scrollable = await page.evaluate(() => {
+    const side = document.querySelector('.editor-side');
+    return side.scrollHeight - side.clientHeight;
+  });
+  assert.ok(scrollable > 40, `목록이 스크롤되지 않아 검사가 무의미하다 (여유 ${scrollable}px)`);
+}
+
+test('타임라인에서 마디를 고르면 목록이 그 카드로 따라 움직인다', async () => {
+  await seedLongSong();
+
+  // 목록 아래쪽 마디를 고른다. 목록이 따라오지 않으면 화면 밖에 남는다.
+  const target = await page.evaluate(async () => {
+    const { state } = await import('./lib/store.js');
+    const { audio } = await import('./lib/audio.js');
+    const i = state.project.blocks.length - 2;
+    const b = state.project.blocks[i];
+    audio.currentTime = (b.start + b.end) / 2;
+    return i;
+  });
+  await page.waitForTimeout(400);
+  await page.locator('.editor-side').evaluate((el) => { el.scrollTop = 0; });
+  await page.waitForTimeout(200);
+
+  // 그 마디가 그려진 정확한 x 좌표를 계산해 누른다.
+  const box = await page.locator('.timeline-canvas').boundingBox();
+  const x = await page.evaluate(async (i) => {
+    const { state } = await import('./lib/store.js');
+    const { audio } = await import('./lib/audio.js');
+    const { windowFor } = await import('./lib/timeline.js');
+    const canvas = document.querySelector('.timeline-canvas');
+    const win = windowFor(state.project, audio.currentTime, canvas.clientWidth);
+    const b = state.project.blocks[i];
+    const mid = (b.start + b.end) / 2;
+    return ((mid - win.from) / (win.to - win.from)) * canvas.clientWidth;
+  }, target);
+
+  await page.mouse.click(box.x + x, box.y + 92);
+  await page.waitForTimeout(600);
+
+  const r = await page.evaluate(async () => {
+    const { state } = await import('./lib/store.js');
+    const i = state.selected;
+    const card = document.querySelectorAll('.block-card')[i];
+    const side = document.querySelector('.editor-side');
+    if (!card) return { i, visible: false };
+    const c = card.getBoundingClientRect();
+    const s = side.getBoundingClientRect();
+    return { i, visible: c.top >= s.top - 4 && c.bottom <= s.bottom + 4 };
+  });
+  assert.equal(r.i, target, `타임라인에서 ${target}번 마디가 선택되지 않았다 (${r.i}번이 선택됨)`);
+  assert.equal(r.visible, true, `고른 마디의 카드가 목록 화면 밖에 있다 — 따라 움직이지 않았다`);
+});
+
+test('고른 마디를 Delete 키로 지울 수 있다', async () => {
+  const before = await page.locator('.block-card').count();
+  const target = await page.evaluate(async () => {
+    const { state } = await import('./lib/store.js');
+    return state.project.blocks[state.selected]?.text ?? null;
+  });
+  assert.ok(target, '선택된 마디가 없다');
+
+  await page.locator('.side-head h2').click(); // 입력란 밖으로 포커스
+  await page.keyboard.press('Delete');
+  await page.waitForTimeout(300);
+
+  assert.equal(await page.locator('.block-card').count(), before - 1, 'Delete로 지워지지 않았다');
+  assert.ok((await page.locator('.toast', { hasText: '되돌리기' }).count()) >= 1, '되돌리기 안내가 없다');
+});
+
+test('목록을 끝까지 내려도 간주 넣기를 누를 수 있다', async () => {
+  await page.locator('.editor-side').evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  await page.waitForTimeout(300);
+
+  // isVisible()은 스크롤 밖으로 밀려난 것도 true로 본다. 화면 안에 있는지 직접 잰다.
+  const inView = await page.evaluate(() => {
+    const btn = [...document.querySelectorAll('.side-tools .btn')].find((b) => b.textContent.includes('간주 넣기'));
+    const side = document.querySelector('.editor-side');
+    if (!btn) return false;
+    const b = btn.getBoundingClientRect();
+    const s = side.getBoundingClientRect();
+    return b.top >= s.top - 4 && b.bottom <= s.bottom + 4;
+  });
+  assert.equal(inView, true, '목록을 내리면 간주 넣기가 화면 밖으로 밀려난다');
+  assert.ok((await page.locator('.tuning .btn', { hasText: '간주 넣기' }).count()) >= 1, '타임라인 곁에 간주 넣기가 없다');
+});
+
 test('빈 구간에 간주를 넣으면 블록 목록에 간주 카드가 생긴다', async () => {
   // 마지막 가사 뒤의 확실한 빈 구간으로 재생 위치를 옮긴다.
-  await page.evaluate(async () => {
+  // 좌표를 고정값으로 쓰면 앞선 검사가 가사를 바꿀 때마다 깨진다. 실제 마지막 끝에서 잰다.
+  const gap = await page.evaluate(async () => {
+    const { state } = await import('./lib/store.js');
     const { audio } = await import('./lib/audio.js');
+    const last = state.project.blocks.filter((b) => b.end > b.start).pop();
+    const from = last ? last.end : 0;
     audio.pause();
-    audio.currentTime = 7.5;
+    audio.currentTime = from + 1;
+    return state.project.media.duration - from;
   });
+  assert.ok(gap > 0.4, `마지막 가사 뒤에 간주를 넣을 자리가 없다 (${gap.toFixed(2)}초)`);
   await page.waitForTimeout(200);
   await page.locator('.side-tools .btn', { hasText: '간주 넣기' }).click();
   await page.waitForTimeout(300);
@@ -274,6 +395,12 @@ test('글자 단위로 처음부터 찍으면 줄 선택 없이 다음 줄로 �
       p.timing.cursor = 0;
       p.timing.fineBlock = undefined;
     });
+  });
+  // 앞선 검사들이 재생 위치를 옮겨 놨을 수 있다. 곡 앞으로 되돌려 놓고 시작한다.
+  await page.evaluate(async () => {
+    const { audio } = await import('./lib/audio.js');
+    audio.pause();
+    audio.currentTime = 0;
   });
   await page.locator('#fine-mode').uncheck().catch(() => {});
   await page.locator('#fine-mode').check();

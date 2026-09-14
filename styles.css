@@ -333,7 +333,11 @@ html.no-icons .btn-iconly::after { content: attr(data-fallback); font-size: var(
 }
 .editor-bottom { grid-column: 1 / -1; grid-row: 2; display: flex; flex-direction: column; gap: var(--s2); }
 
-.side-head { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3); align-items: baseline; }
+.side-head {
+  display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3); align-items: baseline;
+  position: sticky; top: 0; z-index: 3;
+  background: var(--ground); padding-block: var(--s2);
+}
 .side-tools { display: flex; gap: var(--s2); flex: 1 0 100%; }
 .side-tools .btn { flex: 1; min-height: 34px; font-size: var(--t-caption); padding-inline: var(--s2); }
 /* 간주 블록은 가사가 아니므로 한눈에 구분되게 */
@@ -411,7 +415,12 @@ html.no-icons .btn-iconly::after { content: attr(data-fallback); font-size: var(
 .cue-body small { color: var(--subtle); font-size: var(--t-caption); font-weight: 700; letter-spacing: .06em; }
 .cue-text { font-size: clamp(24px, 4.4vw, 38px); font-weight: 800; line-height: 1.25; }
 .cue-text.is-done { color: var(--color-success); }
-.cue-queue { display: flex; gap: var(--s3); color: var(--subtle); font-size: var(--t-small); flex-wrap: wrap; }
+.cue-queue { display: flex; gap: var(--s2); color: var(--subtle); font-size: var(--t-small); flex-wrap: wrap; }
+/* 다음 줄들이 붙어 보이면 어디까지가 한 줄인지 알 수 없다. 칩으로 나눈다. */
+.cue-queue span {
+  padding: 2px 9px; border-radius: var(--r-pill); background: var(--surface-2);
+  max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .cue-actions { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
 .pill { display: inline-flex; align-items: baseline; gap: 2px; padding: 5px 12px; border-radius: var(--r-pill); background: var(--surface-2); color: var(--muted); font-size: var(--t-small); font-variant-numeric: tabular-nums; }
 .pill b { color: var(--ink); font-size: var(--t-body); }
@@ -419,7 +428,7 @@ html.no-icons .btn-iconly::after { content: attr(data-fallback); font-size: var(
 :root[data-theme="dark"] .pill.is-done { background: #14301F; color: #9BE8B4; }
 
 .block-head { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); align-items: baseline; }
-.block-list { display: flex; flex-direction: column; gap: var(--s1); }
+.block-list { display: flex; flex-direction: column; gap: var(--s1); scroll-padding-block: 64px; }
 /* 사이드 패널은 좁다. VREW의 자막 클립 카드처럼 위에 시각·조작, 아래에 가사 전체 폭. */
 .block-card {
   display: grid;
