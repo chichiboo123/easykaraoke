@@ -190,6 +190,21 @@ test('가사 블록을 추가·이동·삭제할 수 있다', async () => {
   assert.notEqual(await cards.nth(0).locator('.block-text').inputValue(), target);
 });
 
+test('오른쪽 목록에서 가사를 지우고 다시 쓸 수 있다 (입력란을 누르면 포커스를 잃던 버그)', async () => {
+  const input = page.locator('.block-card').nth(1).locator('.block-text');
+  await input.click();
+  // 누르자마자 목록을 다시 그리면 입력란이 새 요소로 바뀌어 포커스를 잃는다.
+  assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('block-text')), true, '가사 입력란이 포커스를 잃었다');
+  await page.keyboard.press('Control+A');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('고쳐 쓴 가사');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(150);
+  assert.equal(await page.locator('.block-card').nth(1).locator('.block-text').inputValue(), '고쳐 쓴 가사');
+  const stored = await page.evaluate(async () => (await import('./lib/store.js')).state.project.blocks[1].text);
+  assert.equal(stored, '고쳐 쓴 가사', '고친 가사가 프로젝트에 반영되지 않았다');
+});
+
 /** 목록이 실제로 스크롤되도록 넉넉한 줄을 만들어 둔다. 짧은 목록에서는 아래 검사가 무의미하다. */
 async function seedLongSong() {
   await page.evaluate(async () => {
@@ -477,6 +492,38 @@ test('글자 경계를 밀어 색 차는 속도를 다시 찍지 않고 손볼 �
 
   await page.locator('#fine-mode').uncheck();
   await page.waitForTimeout(200);
+});
+
+test('미리보기 모서리를 끌어 크기를 바꾸면 옆 목록과 아래 조작이 함께 맞춰진다', async () => {
+  const measure = () => page.evaluate(() => {
+    const r = (s) => document.querySelector(s).getBoundingClientRect();
+    return { stage: r('.editor-stage .stage'), side: r('.editor-side'), transport: r('.editor-stage .transport') };
+  });
+  const drag = async (dx) => {
+    const g = await page.locator('.stage-grip').boundingBox();
+    await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(g.x + g.width / 2 + dx, g.y + g.height / 2, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+  };
+
+  await drag(-2000);
+  const small = await measure();
+  await drag(500);
+  const big = await measure();
+  assert.ok(big.stage.width > small.stage.width + 200, `미리보기가 커지지 않았다 (${small.stage.width} → ${big.stage.width})`);
+  assert.ok(Math.abs(big.stage.width / big.stage.height - 16 / 9) < 0.03, '크기를 바꾼 미리보기가 16:9가 아니다');
+  assert.ok(big.side.width < small.side.width, '미리보기가 커졌는데 오른쪽 목록이 좁아지지 않았다');
+  // 아래 조작은 미리보기 폭을 따라가고, 미리보기와 겹치지 않는다.
+  assert.ok(Math.abs(big.transport.width - big.stage.width) < 2, '재생 조작 폭이 미리보기 폭을 따라가지 않는다');
+  assert.ok(big.transport.top >= big.stage.bottom, '재생 조작이 미리보기와 겹친다');
+  assert.ok(big.side.left >= big.stage.right, '미리보기가 오른쪽 목록을 덮는다');
+
+  // 두 번 누르면 자동 크기로 돌아간다.
+  await page.locator('.stage-grip').dblclick();
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator('.editor-shell').evaluate((n) => n.classList.contains('has-stage-w')), false, '원래 크기로 돌아가지 않았다');
 });
 
 test('편집 화면은 페이지가 스크롤되지 않는다 (미리보기가 아래 내용을 가리는 것 방지)', async () => {
