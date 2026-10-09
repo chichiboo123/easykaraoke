@@ -346,7 +346,7 @@ window.addEventListener('keydown', (e) => {
         studioStamp?.(e.timeStamp);
     }
     else if (e.key === 'Delete') {
-        // 타임라인이나 목록에서 고른 마디를 바로 지운다.
+        // 타임라인이나 목록에서 고른 마디의 타이밍을 지운다. 가사 줄은 남는다.
         e.preventDefault();
         studioDelete?.();
     }

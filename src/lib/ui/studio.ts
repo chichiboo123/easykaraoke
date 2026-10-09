@@ -184,8 +184,8 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
     button({
       kind: 'ghost',
       icon: 'delete_outline',
-      label: '마디 지우기',
-      title: '고른 마디를 지워요 (Delete)',
+      label: '타이밍 지우기',
+      title: '고른 마디의 타이밍만 지워요. 가사는 남아요 (Delete)',
       onClick: () => studioDelete?.(),
     }),
     button({
@@ -954,7 +954,11 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
   };
 
   /**
-   * 지금 고른 마디를 지운다. 타임라인에서 고르고 Delete를 눌러도 여기로 온다.
+   * 지금 고른 마디의 타이밍을 지운다. 타임라인에서 고르고 Delete를 눌러도 여기로 온다.
+   *
+   * 타임라인에서 지우는 건 대개 그 줄을 다시 찍으려는 것이다. 그래서 가사 줄은 남기고
+   * 타이밍만 비운다. 줄 자체를 없애는 일은 목록 카드의 휴지통 버튼이 맡는다.
+   * 간주는 타이밍으로만 존재하는 표시라 통째로 지운다.
    * 확인 대화상자 대신 되돌리기 토스트를 쓴다. 키 한 번에 모달이 뜨면 흐름이 끊긴다.
    */
   function deleteSelected(): boolean {
@@ -962,16 +966,34 @@ export function studioScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
     const i = state.selected;
     const block = cur.blocks[i];
     if (!block) {
-      toast('먼저 지울 마디를 골라 주세요.');
+      toast('먼저 타이밍을 지울 마디를 골라 주세요.');
       return false;
     }
-    removeBlock(i);
-    toast(`"${block.text}" 줄을 지웠어요.`, 'info', {
+    const undoAction = {
       label: '되돌리기',
       run: () => {
         if (undo()) refreshAll();
       },
+    };
+    if (block.kind === 'interlude') {
+      removeBlock(i);
+      toast('간주를 지웠어요.', 'info', undoAction);
+      return true;
+    }
+    if (block.end <= block.start) {
+      toast('이 줄은 아직 타이밍이 없어요. 줄 자체를 없애려면 목록의 휴지통 버튼을 눌러 주세요.');
+      return false;
+    }
+    commit(`clear-timing-${block.id}`, () => {
+      block.start = 0;
+      block.end = 0;
+      distribute(block);
+      // 다음 Space가 바로 이 줄을 다시 찍도록 찍을 차례를 여기로 되돌린다.
+      cur.timing.cursor = Math.min(cur.timing.cursor, i);
     });
+    select(i, false);
+    refreshAll();
+    toast(`${i + 1}번 줄의 타이밍만 지웠어요. 가사는 그대로예요.`, 'info', undoAction);
     return true;
   }
 

@@ -287,19 +287,29 @@ test('타임라인에서 마디를 고르면 목록이 그 카드로 따라 움�
   assert.equal(r.visible, true, `고른 마디의 카드가 목록 화면 밖에 있다 — 따라 움직이지 않았다`);
 });
 
-test('고른 마디를 Delete 키로 지울 수 있다', async () => {
+test('고른 마디를 Delete로 지우면 타이밍만 지워지고 가사 줄은 남는다', async () => {
   const before = await page.locator('.block-card').count();
   const target = await page.evaluate(async () => {
     const { state } = await import('./lib/store.js');
-    return state.project.blocks[state.selected]?.text ?? null;
+    const b = state.project.blocks[state.selected];
+    return b ? { index: state.selected, text: b.text, timed: b.end > b.start } : null;
   });
   assert.ok(target, '선택된 마디가 없다');
+  assert.ok(target.timed, '검사하려면 타이밍이 있는 마디여야 한다');
 
   await page.locator('.side-head h2').click(); // 입력란 밖으로 포커스
   await page.keyboard.press('Delete');
   await page.waitForTimeout(300);
 
-  assert.equal(await page.locator('.block-card').count(), before - 1, 'Delete로 지워지지 않았다');
+  assert.equal(await page.locator('.block-card').count(), before, '타임라인에서 지웠는데 가사 줄까지 사라졌다');
+  const after = await page.evaluate(async (i) => {
+    const { state } = await import('./lib/store.js');
+    const b = state.project.blocks[i];
+    return { text: b.text, timed: b.end > b.start, cursor: state.project.timing.cursor };
+  }, target.index);
+  assert.equal(after.text, target.text, '가사가 바뀌었다');
+  assert.equal(after.timed, false, '타이밍이 지워지지 않았다');
+  assert.ok(after.cursor <= target.index, '다음 Space가 지운 줄을 다시 찍도록 차례가 돌아와야 한다');
   assert.ok((await page.locator('.toast', { hasText: '되돌리기' }).count()) >= 1, '되돌리기 안내가 없다');
 });
 
