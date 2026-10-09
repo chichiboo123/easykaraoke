@@ -153,6 +153,129 @@ export function previewCanvas(className: string): HTMLCanvasElement {
   return c;
 }
 
+const PREVIEW_W_KEY = 'yeogi-preview-w';
+const MIN_PREVIEW_W = 320;
+const MIN_SIDE_W = 280;
+
+function readPreviewWidth(): number | null {
+  try {
+    const v = Number(localStorage.getItem(PREVIEW_W_KEY));
+    return v > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePreviewWidth(w: number | null): void {
+  try {
+    if (w == null) localStorage.removeItem(PREVIEW_W_KEY);
+    else localStorage.setItem(PREVIEW_W_KEY, String(Math.round(w)));
+  } catch {
+    /* 시크릿 모드 */
+  }
+}
+
+/**
+ * 미리보기 오른쪽 아래 모서리를 끌어 크기를 바꾸는 손잡이.
+ *
+ * 미리보기의 폭이 곧 편집기 왼쪽 칸의 폭이 된다. 그래서 미리보기를 키우면
+ * 그 아래 재생 조작·찍기 패널은 함께 넓어지고, 오른쪽 목록은 그만큼 좁아진다.
+ * 크기는 화면을 옮겨 다녀도 유지되도록 기억해 두고, 두 번 누르면 자동 크기로 돌아간다.
+ */
+export function previewResizer(shell: HTMLElement, stage: HTMLElement, onResize?: () => void): HTMLButtonElement {
+  const grip = el('button', { type: 'button', class: 'stage-grip', title: '끌어서 미리보기 크기 조절 · 두 번 누르면 원래대로' });
+  grip.setAttribute('aria-label', '미리보기 크기 조절 (화살표 키로 조절, 두 번 누르면 원래대로)');
+
+  /** 사용자가 고른 폭. 창이 작아지면 잠시 줄여 보여 주되, 원래 값은 지킨다. */
+  let wanted = readPreviewWidth();
+
+  const maxWidth = () => {
+    const cs = getComputedStyle(shell);
+    const inner = shell.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const gap = parseFloat(cs.columnGap) || 0;
+    const pane = stage.parentElement;
+    // 오른쪽 목록이 쓸 자리를 남기고, 미리보기와 바로 아래 재생 조작이 한 화면 높이 안에 들어오게.
+    const below = stage.nextElementSibling instanceof HTMLElement ? stage.nextElementSibling.offsetHeight + (parseFloat(pane ? getComputedStyle(pane).rowGap : '') || 0) : 0;
+    const byHeight = pane && pane.clientHeight > 0 ? ((pane.clientHeight - below) * 16) / 9 : Infinity;
+    return Math.max(MIN_PREVIEW_W, Math.min(inner - gap - MIN_SIDE_W, byHeight));
+  };
+  const clampWidth = (w: number) => Math.max(MIN_PREVIEW_W, Math.min(maxWidth(), w));
+
+  const apply = () => {
+    if (wanted == null) {
+      shell.classList.remove('has-stage-w');
+      shell.style.removeProperty('--stage-w');
+    } else {
+      shell.classList.add('has-stage-w');
+      shell.style.setProperty('--stage-w', `${Math.round(clampWidth(wanted))}px`);
+    }
+    onResize?.();
+  };
+
+  /** 지금 보이는 그림의 폭. 자동 크기에서는 무대 칸이 16:9가 아닐 수 있다. */
+  const shownWidth = () => {
+    const r = stage.getBoundingClientRect();
+    return Math.min(r.width, (r.height * 16) / 9);
+  };
+
+  grip.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    grip.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startW = shownWidth();
+    shell.classList.add('is-resizing');
+    const move = (ev: PointerEvent) => {
+      // 가로로 끌든 세로로 끌든 16:9를 지킨 채 더 크게 움직인 쪽을 따른다.
+      const dx = ev.clientX - startX;
+      const dy = ((ev.clientY - startY) * 16) / 9;
+      wanted = clampWidth(startW + (Math.abs(dx) >= Math.abs(dy) ? dx : dy));
+      apply();
+    };
+    const up = () => {
+      grip.removeEventListener('pointermove', move);
+      grip.removeEventListener('pointerup', up);
+      grip.removeEventListener('pointercancel', up);
+      shell.classList.remove('is-resizing');
+      writePreviewWidth(wanted);
+    };
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', up);
+    grip.addEventListener('pointercancel', up);
+  });
+
+  grip.addEventListener('dblclick', () => {
+    wanted = null;
+    writePreviewWidth(null);
+    apply();
+  });
+
+  grip.addEventListener('keydown', (e) => {
+    const dir = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    if (!dir) return;
+    // 화살표는 전역에서 재생 위치 이동이다. 여기서는 크기 조절로만 쓴다.
+    e.preventDefault();
+    e.stopPropagation();
+    wanted = clampWidth(shownWidth() + dir * (e.shiftKey ? 96 : 24));
+    apply();
+    writePreviewWidth(wanted);
+  });
+
+  // 창 크기가 바뀌면 고른 폭이 들어갈 자리가 달라진다. 화면을 떠나면 관찰을 멈춘다.
+  const ro = new ResizeObserver(() => {
+    if (!shell.isConnected) {
+      ro.disconnect();
+      return;
+    }
+    if (wanted != null) apply();
+  });
+  ro.observe(shell);
+  queueMicrotask(apply);
+
+  return grip;
+}
+
 export function sizeCanvas(c: HTMLCanvasElement, logicalWidth = 1920, logicalHeight = 1080): CanvasRenderingContext2D {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   // 캔버스 CSS 박스가 16:9가 아닐 수 있다(무대를 꽉 채우고 object-fit: contain으로 맞춤).

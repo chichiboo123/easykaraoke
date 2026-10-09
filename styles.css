@@ -317,8 +317,31 @@ html.no-icons .btn-iconly::after { content: attr(data-fallback); font-size: var(
   flex-direction: column;
   gap: var(--s2);
 }
-.editor-stage .stage { flex: 1 1 auto; min-height: 0; }
+.editor-stage .stage { flex: 1 1 auto; min-height: 0; position: relative; }
 .editor-stage .preview { width: 100%; height: 100%; aspect-ratio: auto; object-fit: contain; }
+/* 왼쪽 칸의 폭이 바뀌면 아래 조작들이 그 폭에 맞춰 다시 배치되도록 컨테이너로 둔다. */
+.editor-stage { container: stage / inline-size; }
+
+/* 미리보기 크기 조절 — 오른쪽 아래 모서리 손잡이.
+   사용자가 폭을 고르면 왼쪽 칸이 그 폭이 되고, 미리보기는 16:9로 고정된다.
+   아래 조작이 칸 높이를 넘으면 왼쪽 칸 안에서만 스크롤한다. */
+.editor-shell.has-stage-w { grid-template-columns: min(var(--stage-w), calc(100% - 280px - var(--s3))) minmax(0, 1fr); }
+.editor-shell.has-stage-w .editor-stage { overflow-y: auto; overscroll-behavior: contain; }
+.editor-shell.has-stage-w .editor-stage .stage { flex: none; width: 100%; aspect-ratio: 16 / 9; }
+.editor-shell.has-stage-w .editor-stage .transport { position: static; }
+.editor-shell.is-resizing, .editor-shell.is-resizing * { cursor: nwse-resize !important; user-select: none; }
+.stage-grip {
+  position: absolute; right: 6px; bottom: 6px; z-index: 2;
+  width: 26px; height: 26px; padding: 0; border: 0; border-radius: 7px;
+  background:
+    linear-gradient(135deg, transparent 0 46%, rgba(255,255,255,.85) 46% 53%, transparent 53% 63%, rgba(255,255,255,.85) 63% 70%, transparent 70%),
+    rgba(11,10,20,.55);
+  cursor: nwse-resize; touch-action: none;
+  opacity: .6; transition: opacity .15s, transform .15s;
+}
+.stage:hover .stage-grip, .stage-grip:focus-visible, .is-resizing .stage-grip { opacity: 1; }
+.stage-grip:hover { transform: scale(1.08); }
+.stage-grip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .editor-side {
   grid-column: 2;
@@ -414,6 +437,8 @@ html.no-icons .btn-iconly::after { content: attr(data-fallback); font-size: var(
 .cue-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .cue-body small { color: var(--subtle); font-size: var(--t-caption); font-weight: 700; letter-spacing: .06em; }
 .cue-text { font-size: clamp(24px, 4.4vw, 38px); font-weight: 800; line-height: 1.25; }
+/* 미리보기 칸 폭을 따라 줄어든다(지원하지 않는 브라우저는 위의 vw 값을 쓴다). */
+.editor-stage .cue-text { font-size: clamp(22px, 5.2cqi, 38px); }
 .cue-text.is-done { color: var(--color-success); }
 .cue-queue { display: flex; gap: var(--s2); color: var(--subtle); font-size: var(--t-small); flex-wrap: wrap; }
 /* 다음 줄들이 붙어 보이면 어디까지가 한 줄인지 알 수 없다. 칩으로 나눈다. */
@@ -537,6 +562,21 @@ html.no-icons .btn-iconly::after { content: attr(data-fallback); font-size: var(
 .chichiboo-footer a:hover { color: var(--accent-ink); }
 .chichiboo-footer .mi { font-size: 16px; }
 
+/* 미리보기를 키워 왼쪽 칸이 좁아지거나 넓어질 때 아래 조작이 자연스럽게 다시 배치된다. */
+@container stage (max-width: 640px) {
+  .transport { gap: var(--s2); padding: var(--s2); }
+  .transport-clock { min-width: 0; }
+  .cue { flex-direction: column; align-items: stretch; gap: var(--s3); padding: var(--s3) var(--s4); }
+  .cue-actions .btn { flex: 1; }
+  .fine-toggle { padding: var(--s2) var(--s3); }
+}
+@container stage (max-width: 480px) {
+  .transport-group > .mi { display: none; }
+  .slider-volume { width: 64px; }
+  .transport-right { margin-left: 0; }
+  .fine-toggle small { display: none; }
+}
+
 /* ── 부팅 ────────────────────────────────────────────── */
 .boot-status { min-height: 100vh; display: grid; place-content: center; gap: var(--s3); text-align: center; padding: var(--s5); }
 .boot-status strong { font-size: var(--t-h3); }
@@ -556,6 +596,11 @@ html.no-icons .btn-iconly::after { content: attr(data-fallback); font-size: var(
   .editor-shell { grid-template-columns: 1fr; grid-template-rows: auto; padding-inline: max(var(--s4), 3vw); }
   .editor-stage, .editor-side, .editor-bottom { grid-column: 1; grid-row: auto; overflow: visible; min-height: 0; }
   .editor-stage .preview { max-height: 34vh; }
+  /* 한 칸짜리 배치에서는 크기 조절을 쓰지 않는다. */
+  .editor-shell.has-stage-w { grid-template-columns: 1fr; }
+  .editor-shell.has-stage-w .editor-stage { overflow: visible; }
+  .editor-shell.has-stage-w .editor-stage .stage { aspect-ratio: auto; }
+  .stage-grip { display: none; }
   .side-foot { margin-top: var(--s2); }
   .cue { flex-direction: column; align-items: stretch; }
   .cue-actions .btn { flex: 1; }

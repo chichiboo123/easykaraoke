@@ -7,7 +7,7 @@ import { renderFrame } from '../renderer.js';
 import { savePackage } from '../package.js';
 import { commit, markFileDirty, project, refreshBackground, setBackground, state } from '../store.js';
 import { SCENES, SCENE_GROUPS } from '../scenes.js';
-import { button, clock, el, filePicker, icon, previewCanvas, sizeCanvas, toast } from './shell.js';
+import { button, clock, el, filePicker, icon, previewCanvas, previewResizer, sizeCanvas, toast } from './shell.js';
 
 let raf = 0;
 /** 다시 그려도 보고 있던 탭이 유지되도록 화면 밖에 둔다. */
@@ -33,10 +33,13 @@ export function finishScreen(rerender: () => void, go: (step: 1 | 2 | 3) => void
 
   // 미리보기는 왼쪽 무대에 고정하고, 설정은 오른쪽에서 따로 스크롤한다(VREW·캡컷 배치).
   // 이전에는 미리보기가 sticky라 아래 패널들이 그 뒤로 스크롤되어 가려졌다.
-  const stagePane = el('div', { class: 'editor-stage' }, [el('div', { class: 'stage' }, [preview])]);
+  const stage = el('div', { class: 'stage' }, [preview]);
+  const stagePane = el('div', { class: 'editor-stage' }, [stage]);
   const sidePane = el('div', { class: 'editor-side' });
   root.className = 'editor-shell editor-shell-finish';
   root.append(stagePane, sidePane);
+  // 재생 중이 아니면 미리보기를 다시 그리지 않으므로, 크기가 바뀌면 직접 그린다.
+  stage.append(previewResizer(root, stage, () => redraw()));
 
   // ── 무대 씬 ──────────────────────────────────────────
   // 썸네일을 실제 렌더러로 그린다. V1은 CSS 색을 따로 하드코딩해 결과와 달랐다.
